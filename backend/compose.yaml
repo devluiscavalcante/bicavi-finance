@@ -1,0 +1,16 @@
+# Sobe apenas o PostgreSQL para desenvolvimento local.
+# As credenciais vêm do arquivo .env (não versionado). Veja .env.example.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
