@@ -3,9 +3,11 @@ package com.bicavi.category;
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
 import com.bicavi.transaction.TransactionType;
+import com.bicavi.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // @WebMvcTest sobe só a camada web (controller, validação, tratamento de erros).
 // O service é substituído por um mock: aqui testamos HTTP, não regras de negócio.
 @WebMvcTest(CategoryController.class)
+@Import(SecurityConfig.class)
 class CategoryControllerTest {
 
     @Autowired
