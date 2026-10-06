@@ -1,6 +1,7 @@
 package com.bicavi.transaction;
 
 import com.bicavi.category.Category;
+import com.bicavi.common.BusinessRuleException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -54,30 +55,45 @@ public class Transaction {
 
     public Transaction(Category category, BigDecimal amount, TransactionType type,
                        String description, LocalDate occurredOn) {
-        if (amount == null || amount.signum() <= 0) {
-            throw new IllegalArgumentException("O valor deve ser maior que zero");
-        }
-        // O banco arredondaria 10.555 para 10.56 sem avisar. Melhor recusar.
-        if (amount.scale() > 2) {
-            throw new IllegalArgumentException("O valor deve ter no máximo 2 casas decimais");
-        }
-        if (type == null) {
-            throw new IllegalArgumentException("O tipo é obrigatório");
-        }
-        if (occurredOn == null) {
-            throw new IllegalArgumentException("A data é obrigatória");
-        }
-        if (category != null && category.getType() != type) {
-            throw new IllegalArgumentException("A categoria '" + category.getName()
-                    + "' só aceita transações do tipo " + category.getType());
-        }
+        apply(category, amount, type, description, occurredOn);
+        this.createdAt = Instant.now();
+    }
 
+    // Substitui todos os dados editáveis, aplicando as mesmas regras da criação.
+    public void update(Category category, BigDecimal amount, TransactionType type,
+                       String description, LocalDate occurredOn) {
+        apply(category, amount, type, description, occurredOn);
+    }
+
+    // private: não pode ser sobrescrito, então é seguro chamar no construtor.
+    private void apply(Category category, BigDecimal amount, TransactionType type,
+                       String description, LocalDate occurredOn) {
+        validate(category, amount, type, occurredOn);
         this.category = category;
         this.amount = amount;
         this.type = type;
         this.description = description;
         this.occurredOn = occurredOn;
-        this.createdAt = Instant.now();
+    }
+
+    private static void validate(Category category, BigDecimal amount, TransactionType type, LocalDate occurredOn) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new BusinessRuleException("O valor deve ser maior que zero");
+        }
+        // O banco arredondaria 10.555 para 10.56 sem avisar. Melhor recusar.
+        if (amount.scale() > 2) {
+            throw new BusinessRuleException("O valor deve ter no máximo 2 casas decimais");
+        }
+        if (type == null) {
+            throw new BusinessRuleException("O tipo é obrigatório");
+        }
+        if (occurredOn == null) {
+            throw new BusinessRuleException("A data é obrigatória");
+        }
+        if (category != null && category.getType() != type) {
+            throw new BusinessRuleException("A categoria '" + category.getName()
+                    + "' só aceita transações do tipo " + category.getType());
+        }
     }
 
     public Long getId() {

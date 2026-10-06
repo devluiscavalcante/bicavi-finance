@@ -1,6 +1,7 @@
 package com.bicavi.transaction;
 
 import com.bicavi.category.Category;
+import com.bicavi.common.BusinessRuleException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -33,22 +34,22 @@ class TransactionTest {
     @Test
     void rejectsZeroOrNegativeAmount() {
         assertThatThrownBy(() -> new Transaction(groceries, BigDecimal.ZERO, TransactionType.EXPENSE, null, TODAY))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BusinessRuleException.class);
         assertThatThrownBy(() -> new Transaction(groceries, new BigDecimal("-5"), TransactionType.EXPENSE, null, TODAY))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
     void rejectsMoreThanTwoDecimalPlaces() {
         assertThatThrownBy(() -> new Transaction(groceries, new BigDecimal("10.555"), TransactionType.EXPENSE, null, TODAY))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("2 casas decimais");
     }
 
     @Test
     void rejectsTypeDifferentFromCategoryType() {
         assertThatThrownBy(() -> new Transaction(groceries, new BigDecimal("10"), TransactionType.INCOME, null, TODAY))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Mercado");
     }
 }

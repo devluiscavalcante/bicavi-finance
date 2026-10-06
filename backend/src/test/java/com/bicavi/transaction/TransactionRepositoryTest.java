@@ -4,6 +4,8 @@ import com.bicavi.TestcontainersConfiguration;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
 import jakarta.persistence.EntityManager;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -14,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -93,6 +96,66 @@ class TransactionRepositoryTest {
                 VALUES (999999, 10, 'EXPENSE', DATE '2026-10-06', now())
                 """))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void findInPeriodRespectsMonthBoundaries() {
+        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
+        saveExpense(groceries, "30/09", LocalDate.of(2026, 9, 30));
+        saveExpense(groceries, "01/10", LocalDate.of(2026, 10, 1));
+        saveExpense(groceries, "31/10", LocalDate.of(2026, 10, 31));
+        saveExpense(groceries, "01/11", LocalDate.of(2026, 11, 1));
+        flushAndClear();
+
+        List<Transaction> october = transactions.findInPeriod(
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
+
+        // Ordenado da mais recente para a mais antiga
+        assertThat(october).extracting(Transaction::getDescription).containsExactly("31/10", "01/10");
+    }
+
+    @Test
+    void findInPeriodFiltersByCategoryAndIncludesUncategorizedWhenNoFilter() {
+        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
+        Category transport = categories.save(new Category("Transporte", TransactionType.EXPENSE));
+        saveExpense(groceries, "mercado", DAY);
+        saveExpense(transport, "uber", DAY);
+        saveExpense(null, "sem categoria", DAY);
+        flushAndClear();
+
+        LocalDate start = LocalDate.of(2026, 10, 1);
+        LocalDate end = LocalDate.of(2026, 11, 1);
+
+        assertThat(transactions.findInPeriod(start, end, transport.getId()))
+                .extracting(Transaction::getDescription).containsExactly("uber");
+        assertThat(transactions.findInPeriod(start, end, null))
+                .extracting(Transaction::getDescription)
+                .containsExactlyInAnyOrder("mercado", "uber", "sem categoria");
+    }
+
+    @Test
+    void findInPeriodLoadsCategoriesInASingleQuery() {
+        for (int i = 1; i <= 5; i++) {
+            Category category = categories.save(new Category("Categoria " + i, TransactionType.EXPENSE));
+            saveExpense(category, "gasto " + i, DAY);
+        }
+        flushAndClear();
+
+        Statistics stats = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true);
+        stats.clear();
+
+        List<Transaction> result = transactions.findInPeriod(
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
+        result.forEach(tx -> tx.getCategory().getName()); // acessa cada categoria
+
+        // Sem o JOIN FETCH seriam 6 consultas: 1 para as transações + 1 por categoria (N+1).
+        assertThat(result).hasSize(5);
+        assertThat(stats.getPrepareStatementCount()).isEqualTo(1);
+    }
+
+    private void saveExpense(Category category, String description, LocalDate day) {
+        transactions.save(new Transaction(category, new BigDecimal("10.00"), TransactionType.EXPENSE, description, day));
     }
 
     // flush: envia ao banco os comandos SQL pendentes.
