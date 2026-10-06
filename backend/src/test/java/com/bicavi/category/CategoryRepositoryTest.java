@@ -1,0 +1,59 @@
+package com.bicavi.category;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+// @DataJpaTest sobe só a camada de persistência (JPA + Flyway) e desfaz
+// (rollback) cada teste ao final. replace = NONE usa o PostgreSQL real
+// em vez de tentar trocar por um banco em memória.
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+class CategoryRepositoryTest {
+
+    @Autowired
+    private CategoryRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    void savesAndFindsCategory() {
+        Category saved = repository.save(new Category("Mercado", CategoryType.EXPENSE));
+
+        assertThat(saved.getId()).isNotNull();
+        Category found = repository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getName()).isEqualTo("Mercado");
+        assertThat(found.getType()).isEqualTo(CategoryType.EXPENSE);
+    }
+
+    @Test
+    void storesTypeAsTextInDatabase() {
+        Category saved = repository.saveAndFlush(new Category("Salário", CategoryType.INCOME));
+
+        String typeInDb = jdbc.queryForObject(
+                "SELECT type FROM categories WHERE id = ?", String.class, saved.getId());
+        assertThat(typeInDb).isEqualTo("INCOME");
+    }
+
+    @Test
+    void rejectsDuplicateName() {
+        repository.saveAndFlush(new Category("Transporte", CategoryType.EXPENSE));
+
+        assertThatThrownBy(() -> repository.saveAndFlush(new Category("Transporte", CategoryType.EXPENSE)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsInvalidTypeDirectlyInDatabase() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO categories (name, type) VALUES ('X', 'OUTRO')"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+}
