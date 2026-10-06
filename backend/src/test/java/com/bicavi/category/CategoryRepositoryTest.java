@@ -1,6 +1,7 @@
 package com.bicavi.category;
 
 import com.bicavi.TestcontainersConfiguration;
+import com.bicavi.transaction.TransactionType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -28,17 +29,17 @@ class CategoryRepositoryTest {
 
     @Test
     void savesAndFindsCategory() {
-        Category saved = repository.save(new Category("Mercado", CategoryType.EXPENSE));
+        Category saved = repository.save(new Category("Mercado", TransactionType.EXPENSE));
 
         assertThat(saved.getId()).isNotNull();
         Category found = repository.findById(saved.getId()).orElseThrow();
         assertThat(found.getName()).isEqualTo("Mercado");
-        assertThat(found.getType()).isEqualTo(CategoryType.EXPENSE);
+        assertThat(found.getType()).isEqualTo(TransactionType.EXPENSE);
     }
 
     @Test
     void storesTypeAsTextInDatabase() {
-        Category saved = repository.saveAndFlush(new Category("Salário", CategoryType.INCOME));
+        Category saved = repository.saveAndFlush(new Category("Salário", TransactionType.INCOME));
 
         String typeInDb = jdbc.queryForObject(
                 "SELECT type FROM categories WHERE id = ?", String.class, saved.getId());
@@ -47,9 +48,9 @@ class CategoryRepositoryTest {
 
     @Test
     void rejectsDuplicateName() {
-        repository.saveAndFlush(new Category("Transporte", CategoryType.EXPENSE));
+        repository.saveAndFlush(new Category("Transporte", TransactionType.EXPENSE));
 
-        assertThatThrownBy(() -> repository.saveAndFlush(new Category("Transporte", CategoryType.EXPENSE)))
+        assertThatThrownBy(() -> repository.saveAndFlush(new Category("Transporte", TransactionType.EXPENSE)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

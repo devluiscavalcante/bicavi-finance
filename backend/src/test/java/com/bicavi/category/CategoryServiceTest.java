@@ -2,6 +2,7 @@ package com.bicavi.category;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.transaction.TransactionType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,17 +34,17 @@ class CategoryServiceTest {
         when(repository.existsByName("Mercado")).thenReturn(false);
         when(repository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        CategoryResponse response = service.create(new CreateCategoryRequest("  Mercado  ", CategoryType.EXPENSE));
+        CategoryResponse response = service.create(new CreateCategoryRequest("  Mercado  ", TransactionType.EXPENSE));
 
         assertThat(response.name()).isEqualTo("Mercado");
-        assertThat(response.type()).isEqualTo(CategoryType.EXPENSE);
+        assertThat(response.type()).isEqualTo(TransactionType.EXPENSE);
     }
 
     @Test
     void createRejectsDuplicateName() {
         when(repository.existsByName("Mercado")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateCategoryRequest("Mercado", CategoryType.EXPENSE)))
+        assertThatThrownBy(() -> service.create(new CreateCategoryRequest("Mercado", TransactionType.EXPENSE)))
                 .isInstanceOf(ConflictException.class);
         verify(repository, never()).save(any());
     }
@@ -59,7 +60,7 @@ class CategoryServiceTest {
 
     @Test
     void renameToSameNameDoesNotCheckDuplicates() {
-        Category category = new Category("Mercado", CategoryType.EXPENSE);
+        Category category = new Category("Mercado", TransactionType.EXPENSE);
         when(repository.findById(1L)).thenReturn(Optional.of(category));
 
         CategoryResponse response = service.rename(1L, new UpdateCategoryRequest("Mercado"));
@@ -70,7 +71,7 @@ class CategoryServiceTest {
 
     @Test
     void renameRejectsNameOfAnotherCategory() {
-        Category category = new Category("Mercado", CategoryType.EXPENSE);
+        Category category = new Category("Mercado", TransactionType.EXPENSE);
         when(repository.findById(1L)).thenReturn(Optional.of(category));
         when(repository.existsByName("Transporte")).thenReturn(true);
 

@@ -2,6 +2,7 @@ package com.bicavi.category;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.transaction.TransactionType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -32,7 +33,7 @@ class CategoryControllerTest {
 
     @Test
     void listReturns200WithJsonArray() throws Exception {
-        when(service.list()).thenReturn(List.of(new CategoryResponse(1L, "Mercado", CategoryType.EXPENSE)));
+        when(service.list()).thenReturn(List.of(new CategoryResponse(1L, "Mercado", TransactionType.EXPENSE)));
 
         mockMvc.perform(get("/api/categories"))
                 .andExpect(status().isOk())
@@ -43,7 +44,7 @@ class CategoryControllerTest {
 
     @Test
     void createReturns201() throws Exception {
-        when(service.create(any())).thenReturn(new CategoryResponse(1L, "Mercado", CategoryType.EXPENSE));
+        when(service.create(any())).thenReturn(new CategoryResponse(1L, "Mercado", TransactionType.EXPENSE));
 
         mockMvc.perform(post("/api/categories")
                         .contentType(MediaType.APPLICATION_JSON)

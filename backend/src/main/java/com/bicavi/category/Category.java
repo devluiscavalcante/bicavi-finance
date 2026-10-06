@@ -1,5 +1,6 @@
 package com.bicavi.category;
 
+import com.bicavi.transaction.TransactionType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,13 +23,13 @@ public class Category {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
-    private CategoryType type;
+    private TransactionType type;
 
     // Exigido pelo JPA para criar o objeto ao ler do banco. Não usar no código.
     protected Category() {
     }
 
-    public Category(String name, CategoryType type) {
+    public Category(String name, TransactionType type) {
         this.name = name;
         this.type = type;
     }
@@ -41,7 +42,7 @@ public class Category {
         return name;
     }
 
-    public CategoryType getType() {
+    public TransactionType getType() {
         return type;
     }
 
