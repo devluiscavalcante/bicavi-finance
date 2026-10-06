@@ -28,6 +28,9 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     // Muitas transações -> uma categoria. LAZY: a categoria só é buscada
     // no banco se alguém chamar getCategory().
     @ManyToOne(fetch = FetchType.LAZY)
@@ -53,8 +56,9 @@ public class Transaction {
     protected Transaction() {
     }
 
-    public Transaction(Category category, BigDecimal amount, TransactionType type,
+    public Transaction(Long userId, Category category, BigDecimal amount, TransactionType type,
                        String description, LocalDate occurredOn) {
+        this.userId = userId;
         apply(category, amount, type, description, occurredOn);
         this.createdAt = Instant.now();
     }
@@ -69,6 +73,11 @@ public class Transaction {
     private void apply(Category category, BigDecimal amount, TransactionType type,
                        String description, LocalDate occurredOn) {
         validate(category, amount, type, occurredOn);
+        // Defesa extra: o service só deveria passar categorias do próprio usuário.
+        // Se isto disparar, é BUG nosso (500), não erro do cliente (400).
+        if (category != null && !category.getUserId().equals(userId)) {
+            throw new IllegalStateException("Categoria de outro usuário associada à transação");
+        }
         this.category = category;
         this.amount = amount;
         this.type = type;
@@ -98,6 +107,10 @@ public class Transaction {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public Category getCategory() {

@@ -3,9 +3,12 @@ package com.bicavi.transaction;
 import com.bicavi.TestcontainersConfiguration;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
+import com.bicavi.user.User;
+import com.bicavi.user.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -27,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TransactionRepositoryTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 10, 6);
+    private static final LocalDate OCT_1 = LocalDate.of(2026, 10, 1);
+    private static final LocalDate NOV_1 = LocalDate.of(2026, 11, 1);
 
     @Autowired
     private TransactionRepository transactions;
@@ -35,29 +40,49 @@ class TransactionRepositoryTest {
     private CategoryRepository categories;
 
     @Autowired
+    private UserRepository users;
+
+    @Autowired
     private EntityManager entityManager;
 
     @Autowired
     private JdbcTemplate jdbc;
 
+    private Long alice;
+    private Long bob;
+
+    @BeforeEach
+    void createUsers() {
+        alice = users.save(new User("alice@example.com", "$2a$10$hash", "Alice")).getId();
+        bob = users.save(new User("bob@example.com", "$2a$10$hash", "Bob")).getId();
+    }
+
     @Test
     void savesAndReadsTransactionWithCategory() {
-        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
+        Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
         Long id = transactions.save(
-                new Transaction(groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, "Feira", DAY)).getId();
+                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, "Feira", DAY)).getId();
         flushAndClear();
 
-        Transaction found = transactions.findById(id).orElseThrow();
+        Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
         assertThat(found.getAmount()).isEqualByComparingTo("35.90");
         assertThat(found.getOccurredOn()).isEqualTo(DAY);
         assertThat(found.getCategory().getName()).isEqualTo("Mercado");
     }
 
     @Test
+    void doesNotFindTransactionOfAnotherUser() {
+        Long alicesTx = saveExpense(alice, null, "da Alice", DAY);
+        flushAndClear();
+
+        assertThat(transactions.findByIdAndUserId(alicesTx, bob)).isEmpty();
+    }
+
+    @Test
     void storesMoneyExactly() {
         // Em double, 0.1 + 0.2 = 0.30000000000000004. Com BigDecimal + NUMERIC, é exato.
         BigDecimal amount = new BigDecimal("0.1").add(new BigDecimal("0.2"));
-        Long id = transactions.save(new Transaction(null, amount, TransactionType.EXPENSE, null, DAY)).getId();
+        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, null, DAY)).getId();
         flushAndClear();
 
         BigDecimal inDb = jdbc.queryForObject("SELECT amount FROM transactions WHERE id = ?", BigDecimal.class, id);
@@ -66,69 +91,76 @@ class TransactionRepositoryTest {
 
     @Test
     void deletingCategoryKeepsTransactionWithoutCategory() {
-        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
-        Long txId = transactions.save(
-                new Transaction(groceries, new BigDecimal("50.00"), TransactionType.EXPENSE, null, DAY)).getId();
+        Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
+        Long txId = saveExpense(alice, groceries, null, DAY);
         flushAndClear();
 
         categories.deleteById(groceries.getId());
         flushAndClear();
 
-        Transaction found = transactions.findById(txId).orElseThrow();
+        Transaction found = transactions.findByIdAndUserId(txId, alice).orElseThrow();
         assertThat(found.getCategory()).isNull();
-        assertThat(found.getAmount()).isEqualByComparingTo("50.00");
+        assertThat(found.getAmount()).isEqualByComparingTo("10.00");
         assertThat(found.getType()).isEqualTo(TransactionType.EXPENSE);
     }
 
     @Test
     void databaseRejectsNonPositiveAmount() {
+        // user_id válido: o banco deve recusar por causa do valor, não por falta de dono.
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO transactions (amount, type, occurred_on, created_at)
-                VALUES (0, 'EXPENSE', DATE '2026-10-06', now())
-                """))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                INSERT INTO transactions (user_id, amount, type, occurred_on, created_at)
+                VALUES (?, 0, 'EXPENSE', DATE '2026-10-06', now())
+                """, alice))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_amount_positive");
     }
 
     @Test
     void databaseRejectsUnknownCategory() {
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO transactions (category_id, amount, type, occurred_on, created_at)
-                VALUES (999999, 10, 'EXPENSE', DATE '2026-10-06', now())
-                """))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                INSERT INTO transactions (user_id, category_id, amount, type, occurred_on, created_at)
+                VALUES (?, 999999, 10, 'EXPENSE', DATE '2026-10-06', now())
+                """, alice))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_transactions_category");
     }
 
     @Test
     void findInPeriodRespectsMonthBoundaries() {
-        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
-        saveExpense(groceries, "30/09", LocalDate.of(2026, 9, 30));
-        saveExpense(groceries, "01/10", LocalDate.of(2026, 10, 1));
-        saveExpense(groceries, "31/10", LocalDate.of(2026, 10, 31));
-        saveExpense(groceries, "01/11", LocalDate.of(2026, 11, 1));
+        saveExpense(alice, null, "30/09", LocalDate.of(2026, 9, 30));
+        saveExpense(alice, null, "01/10", LocalDate.of(2026, 10, 1));
+        saveExpense(alice, null, "31/10", LocalDate.of(2026, 10, 31));
+        saveExpense(alice, null, "01/11", LocalDate.of(2026, 11, 1));
         flushAndClear();
 
-        List<Transaction> october = transactions.findInPeriod(
-                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
+        List<Transaction> october = transactions.findInPeriod(alice, OCT_1, NOV_1, null);
 
         // Ordenado da mais recente para a mais antiga
         assertThat(october).extracting(Transaction::getDescription).containsExactly("31/10", "01/10");
     }
 
     @Test
-    void findInPeriodFiltersByCategoryAndIncludesUncategorizedWhenNoFilter() {
-        Category groceries = categories.save(new Category("Mercado", TransactionType.EXPENSE));
-        Category transport = categories.save(new Category("Transporte", TransactionType.EXPENSE));
-        saveExpense(groceries, "mercado", DAY);
-        saveExpense(transport, "uber", DAY);
-        saveExpense(null, "sem categoria", DAY);
+    void findInPeriodReturnsOnlyTransactionsOfTheUser() {
+        saveExpense(alice, null, "da Alice", DAY);
+        saveExpense(bob, null, "do Bob", DAY);
         flushAndClear();
 
-        LocalDate start = LocalDate.of(2026, 10, 1);
-        LocalDate end = LocalDate.of(2026, 11, 1);
+        assertThat(transactions.findInPeriod(alice, OCT_1, NOV_1, null))
+                .extracting(Transaction::getDescription).containsExactly("da Alice");
+    }
 
-        assertThat(transactions.findInPeriod(start, end, transport.getId()))
+    @Test
+    void findInPeriodFiltersByCategoryAndIncludesUncategorizedWhenNoFilter() {
+        Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
+        Category transport = categories.save(new Category(alice, "Transporte", TransactionType.EXPENSE));
+        saveExpense(alice, groceries, "mercado", DAY);
+        saveExpense(alice, transport, "uber", DAY);
+        saveExpense(alice, null, "sem categoria", DAY);
+        flushAndClear();
+
+        assertThat(transactions.findInPeriod(alice, OCT_1, NOV_1, transport.getId()))
                 .extracting(Transaction::getDescription).containsExactly("uber");
-        assertThat(transactions.findInPeriod(start, end, null))
+        assertThat(transactions.findInPeriod(alice, OCT_1, NOV_1, null))
                 .extracting(Transaction::getDescription)
                 .containsExactlyInAnyOrder("mercado", "uber", "sem categoria");
     }
@@ -136,8 +168,8 @@ class TransactionRepositoryTest {
     @Test
     void findInPeriodLoadsCategoriesInASingleQuery() {
         for (int i = 1; i <= 5; i++) {
-            Category category = categories.save(new Category("Categoria " + i, TransactionType.EXPENSE));
-            saveExpense(category, "gasto " + i, DAY);
+            Category category = categories.save(new Category(alice, "Categoria " + i, TransactionType.EXPENSE));
+            saveExpense(alice, category, "gasto " + i, DAY);
         }
         flushAndClear();
 
@@ -145,8 +177,7 @@ class TransactionRepositoryTest {
         stats.setStatisticsEnabled(true);
         stats.clear();
 
-        List<Transaction> result = transactions.findInPeriod(
-                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
+        List<Transaction> result = transactions.findInPeriod(alice, OCT_1, NOV_1, null);
         result.forEach(tx -> tx.getCategory().getName()); // acessa cada categoria
 
         // Sem o JOIN FETCH seriam 6 consultas: 1 para as transações + 1 por categoria (N+1).
@@ -154,8 +185,9 @@ class TransactionRepositoryTest {
         assertThat(stats.getPrepareStatementCount()).isEqualTo(1);
     }
 
-    private void saveExpense(Category category, String description, LocalDate day) {
-        transactions.save(new Transaction(category, new BigDecimal("10.00"), TransactionType.EXPENSE, description, day));
+    private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
+        return transactions.save(new Transaction(
+                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, description, day)).getId();
     }
 
     // flush: envia ao banco os comandos SQL pendentes.

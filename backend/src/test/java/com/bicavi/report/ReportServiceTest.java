@@ -22,12 +22,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ReportServiceTest {
 
+    private static final Long USER = 1L;
     private static final YearMonth OCTOBER = YearMonth.of(2026, 10);
     private static final LocalDate DAY = LocalDate.of(2026, 10, 6);
 
-    private final Category salary = new Category("Salário", TransactionType.INCOME);
-    private final Category groceries = new Category("Mercado", TransactionType.EXPENSE);
-    private final Category transport = new Category("Transporte", TransactionType.EXPENSE);
+    private final Category salary = new Category(USER, "Salário", TransactionType.INCOME);
+    private final Category groceries = new Category(USER, "Mercado", TransactionType.EXPENSE);
+    private final Category transport = new Category(USER, "Transporte", TransactionType.EXPENSE);
 
     @Mock
     private TransactionRepository transactions;
@@ -42,7 +43,7 @@ class ReportServiceTest {
                 expense(groceries, "350.50"),
                 expense(transport, "120.00"));
 
-        MonthlySummaryResponse summary = service.monthlySummary(OCTOBER);
+        MonthlySummaryResponse summary = service.monthlySummary(USER, OCTOBER);
 
         assertThat(summary.totalIncome()).isEqualByComparingTo("5000.00");
         assertThat(summary.totalExpense()).isEqualByComparingTo("470.50");
@@ -53,7 +54,7 @@ class ReportServiceTest {
     void balanceCanBeNegative() {
         givenOctoberTransactions(income(salary, "100.00"), expense(groceries, "150.00"));
 
-        assertThat(service.monthlySummary(OCTOBER).balance()).isEqualByComparingTo("-50.00");
+        assertThat(service.monthlySummary(USER, OCTOBER).balance()).isEqualByComparingTo("-50.00");
     }
 
     @Test
@@ -65,7 +66,7 @@ class ReportServiceTest {
                 expense(null, "70.00"),
                 income(salary, "5000.00")); // receita não entra em "gastos por categoria"
 
-        List<CategoryTotal> byCategory = service.monthlySummary(OCTOBER).expensesByCategory();
+        List<CategoryTotal> byCategory = service.monthlySummary(USER, OCTOBER).expensesByCategory();
 
         assertThat(byCategory).extracting(CategoryTotal::categoryName)
                 .containsExactly("Mercado", "Sem categoria", "Transporte");
@@ -80,14 +81,14 @@ class ReportServiceTest {
         // Com double: 0.1 + 0.2 = 0.30000000000000004
         givenOctoberTransactions(expense(groceries, "0.10"), expense(groceries, "0.20"));
 
-        assertThat(service.monthlySummary(OCTOBER).totalExpense()).isEqualTo(new BigDecimal("0.30"));
+        assertThat(service.monthlySummary(USER, OCTOBER).totalExpense()).isEqualTo(new BigDecimal("0.30"));
     }
 
     @Test
     void emptyMonthReturnsZerosWithTwoDecimals() {
         givenOctoberTransactions();
 
-        MonthlySummaryResponse summary = service.monthlySummary(OCTOBER);
+        MonthlySummaryResponse summary = service.monthlySummary(USER, OCTOBER);
 
         // isEqualTo (e não isEqualByComparingTo) também confere a escala: "0.00", não "0"
         assertThat(summary.totalIncome()).isEqualTo(new BigDecimal("0.00"));
@@ -100,21 +101,21 @@ class ReportServiceTest {
     void queriesTheWholeMonth() {
         givenOctoberTransactions();
 
-        service.monthlySummary(OCTOBER);
+        service.monthlySummary(USER, OCTOBER);
 
-        verify(transactions).findInPeriod(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
+        verify(transactions).findInPeriod(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null);
     }
 
     private void givenOctoberTransactions(Transaction... txs) {
-        when(transactions.findInPeriod(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null))
+        when(transactions.findInPeriod(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1), null))
                 .thenReturn(List.of(txs));
     }
 
     private static Transaction income(Category category, String amount) {
-        return new Transaction(category, new BigDecimal(amount), TransactionType.INCOME, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, DAY);
     }
 
     private static Transaction expense(Category category, String amount) {
-        return new Transaction(category, new BigDecimal(amount), TransactionType.EXPENSE, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, null, DAY);
     }
 }

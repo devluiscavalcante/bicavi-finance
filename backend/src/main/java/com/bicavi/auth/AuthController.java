@@ -1,5 +1,6 @@
 package com.bicavi.auth;
 
+import com.bicavi.security.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,6 +37,6 @@ public class AuthController {
     // já validado; o "sub" (subject) é o id do usuário que colocamos no login.
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
-        return service.me(Long.valueOf(jwt.getSubject()));
+        return service.me(CurrentUser.id(jwt));
     }
 }

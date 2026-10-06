@@ -33,8 +33,8 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public MonthlySummaryResponse monthlySummary(YearMonth month) {
-        List<Transaction> all = transactions.findInPeriod(month.atDay(1), month.plusMonths(1).atDay(1), null);
+    public MonthlySummaryResponse monthlySummary(Long userId, YearMonth month) {
+        List<Transaction> all = transactions.findInPeriod(userId, month.atDay(1), month.plusMonths(1).atDay(1), null);
 
         BigDecimal income = sum(all, TransactionType.INCOME);
         BigDecimal expense = sum(all, TransactionType.EXPENSE);

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.YearMonth;
 import java.util.List;
 
+// Todo método recebe o userId do usuário logado (vindo do token, nunca do cliente).
 @Service
 public class TransactionService {
 
@@ -22,22 +23,23 @@ public class TransactionService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> list(YearMonth month, Long categoryId) {
-        return transactions.findInPeriod(month.atDay(1), month.plusMonths(1).atDay(1), categoryId)
+    public List<TransactionResponse> list(Long userId, YearMonth month, Long categoryId) {
+        return transactions.findInPeriod(userId, month.atDay(1), month.plusMonths(1).atDay(1), categoryId)
                 .stream()
                 .map(TransactionResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public TransactionResponse get(Long id) {
-        return TransactionResponse.from(findOrThrow(id));
+    public TransactionResponse get(Long userId, Long id) {
+        return TransactionResponse.from(findOrThrow(userId, id));
     }
 
     @Transactional
-    public TransactionResponse create(TransactionRequest request) {
+    public TransactionResponse create(Long userId, TransactionRequest request) {
         Transaction tx = new Transaction(
-                findCategory(request.categoryId()),
+                userId,
+                findCategory(userId, request.categoryId()),
                 request.amount(),
                 request.type(),
                 normalize(request.description()),
@@ -46,10 +48,10 @@ public class TransactionService {
     }
 
     @Transactional
-    public TransactionResponse update(Long id, TransactionRequest request) {
-        Transaction tx = findOrThrow(id);
+    public TransactionResponse update(Long userId, Long id, TransactionRequest request) {
+        Transaction tx = findOrThrow(userId, id);
         tx.update(
-                findCategory(request.categoryId()),
+                findCategory(userId, request.categoryId()),
                 request.amount(),
                 request.type(),
                 normalize(request.description()),
@@ -58,22 +60,23 @@ public class TransactionService {
     }
 
     @Transactional
-    public void delete(Long id) {
-        transactions.delete(findOrThrow(id));
+    public void delete(Long userId, Long id) {
+        transactions.delete(findOrThrow(userId, id));
     }
 
-    private Transaction findOrThrow(Long id) {
-        return transactions.findById(id)
+    private Transaction findOrThrow(Long userId, Long id) {
+        return transactions.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("Transação " + id + " não encontrada"));
     }
 
-    // categoryId é opcional. Se veio preenchido, a categoria precisa existir.
+    // categoryId é opcional. Se veio preenchido, precisa ser uma categoria DO USUÁRIO.
+    // Categoria de outro usuário recebe a mesma resposta de uma inexistente.
     // É 400 (dado enviado errado), não 404: o recurso acessado é a transação.
-    private Category findCategory(Long categoryId) {
+    private Category findCategory(Long userId, Long categoryId) {
         if (categoryId == null) {
             return null;
         }
-        return categories.findById(categoryId)
+        return categories.findByIdAndUserId(categoryId, userId)
                 .orElseThrow(() -> new BusinessRuleException("Categoria " + categoryId + " não existe"));
     }
 

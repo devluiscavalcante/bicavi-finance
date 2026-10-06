@@ -18,6 +18,11 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Dono da categoria. Só o id (e não @ManyToOne User): nunca precisamos
+    // dos dados do usuário a partir da categoria, apenas filtrar por ele.
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 50)
     private String name;
 
@@ -29,13 +34,18 @@ public class Category {
     protected Category() {
     }
 
-    public Category(String name, TransactionType type) {
+    public Category(Long userId, String name, TransactionType type) {
+        this.userId = userId;
         this.name = name;
         this.type = type;
     }
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {

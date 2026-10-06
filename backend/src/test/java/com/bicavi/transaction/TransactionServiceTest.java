@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
 
+    private static final Long USER = 1L;
     private static final LocalDate DAY = LocalDate.of(2026, 10, 6);
 
     @Mock
@@ -38,22 +39,22 @@ class TransactionServiceTest {
     private TransactionService service;
 
     @Test
-    void listConvertsMonthIntoHalfOpenInterval() {
-        when(transactions.findInPeriod(any(), any(), any())).thenReturn(List.of());
+    void listConvertsMonthIntoHalfOpenIntervalForTheUser() {
+        when(transactions.findInPeriod(any(), any(), any(), any())).thenReturn(List.of());
 
-        service.list(YearMonth.of(2026, 2), null);
+        service.list(USER, YearMonth.of(2026, 2), null);
 
         // Fevereiro de 2026 tem 28 dias: o fim exclusivo é 01/03.
-        verify(transactions).findInPeriod(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 3, 1), null);
+        verify(transactions).findInPeriod(USER, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 3, 1), null);
     }
 
     @Test
     void createWithCategory() {
-        Category groceries = new Category("Mercado", TransactionType.EXPENSE);
-        when(categories.findById(1L)).thenReturn(Optional.of(groceries));
+        Category groceries = new Category(USER, "Mercado", TransactionType.EXPENSE);
+        when(categories.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(groceries));
         when(transactions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TransactionResponse response = service.create(
+        TransactionResponse response = service.create(USER,
                 new TransactionRequest(new BigDecimal("35.90"), TransactionType.EXPENSE, 1L, "  Feira  ", DAY));
 
         assertThat(response.amount()).isEqualByComparingTo("35.90");
@@ -65,19 +66,20 @@ class TransactionServiceTest {
     void createWithoutCategoryDoesNotQueryCategories() {
         when(transactions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TransactionResponse response = service.create(
+        TransactionResponse response = service.create(USER,
                 new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, null, "  ", DAY));
 
         assertThat(response.categoryId()).isNull();
         assertThat(response.description()).isNull();
-        verify(categories, never()).findById(any());
+        verify(categories, never()).findByIdAndUserId(any(), any());
     }
 
     @Test
-    void createWithUnknownCategoryIsBusinessRuleViolation() {
-        when(categories.findById(99L)).thenReturn(Optional.empty());
+    void createWithCategoryNotOwnedByUserIsBusinessRuleViolation() {
+        // Inexistente OU de outro usuário: para este usuário, dá no mesmo.
+        when(categories.findByIdAndUserId(99L, USER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(
+        assertThatThrownBy(() -> service.create(USER,
                 new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, 99L, null, DAY)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("99");
@@ -86,12 +88,12 @@ class TransactionServiceTest {
 
     @Test
     void updateChangesAllFields() {
-        Transaction existing = new Transaction(null, new BigDecimal("10"), TransactionType.EXPENSE, "antigo", DAY);
-        Category salary = new Category("Salário", TransactionType.INCOME);
-        when(transactions.findById(1L)).thenReturn(Optional.of(existing));
-        when(categories.findById(2L)).thenReturn(Optional.of(salary));
+        Transaction existing = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, "antigo", DAY);
+        Category salary = new Category(USER, "Salário", TransactionType.INCOME);
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(existing));
+        when(categories.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(salary));
 
-        TransactionResponse response = service.update(1L,
+        TransactionResponse response = service.update(USER, 1L,
                 new TransactionRequest(new BigDecimal("5000.00"), TransactionType.INCOME, 2L, "novo", DAY.plusDays(1)));
 
         assertThat(response.amount()).isEqualByComparingTo("5000.00");
@@ -101,10 +103,10 @@ class TransactionServiceTest {
     }
 
     @Test
-    void updateUnknownTransactionThrowsNotFound() {
-        when(transactions.findById(99L)).thenReturn(Optional.empty());
+    void updateTransactionNotOwnedByUserThrowsNotFound() {
+        when(transactions.findByIdAndUserId(99L, USER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(99L,
+        assertThatThrownBy(() -> service.update(USER, 99L,
                 new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, null, null, DAY)))
                 .isInstanceOf(NotFoundException.class);
     }

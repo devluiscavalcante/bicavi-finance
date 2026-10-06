@@ -14,6 +14,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +25,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CategoryServiceTest {
 
+    private static final Long USER = 1L;
+
     @Mock
     private CategoryRepository repository;
 
@@ -30,52 +34,53 @@ class CategoryServiceTest {
     private CategoryService service;
 
     @Test
-    void createTrimsNameAndSaves() {
-        when(repository.existsByName("Mercado")).thenReturn(false);
+    void createTrimsNameAndSavesForTheLoggedUser() {
+        when(repository.existsByUserIdAndName(USER, "Mercado")).thenReturn(false);
         when(repository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        CategoryResponse response = service.create(new CreateCategoryRequest("  Mercado  ", TransactionType.EXPENSE));
+        CategoryResponse response = service.create(USER, new CreateCategoryRequest("  Mercado  ", TransactionType.EXPENSE));
 
         assertThat(response.name()).isEqualTo("Mercado");
         assertThat(response.type()).isEqualTo(TransactionType.EXPENSE);
+        verify(repository).save(argThat(category -> category.getUserId().equals(USER)));
     }
 
     @Test
-    void createRejectsDuplicateName() {
-        when(repository.existsByName("Mercado")).thenReturn(true);
+    void createRejectsDuplicateNameOfSameUser() {
+        when(repository.existsByUserIdAndName(USER, "Mercado")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateCategoryRequest("Mercado", TransactionType.EXPENSE)))
+        assertThatThrownBy(() -> service.create(USER, new CreateCategoryRequest("Mercado", TransactionType.EXPENSE)))
                 .isInstanceOf(ConflictException.class);
         verify(repository, never()).save(any());
     }
 
     @Test
-    void getThrowsWhenCategoryDoesNotExist() {
-        when(repository.findById(99L)).thenReturn(Optional.empty());
+    void getThrowsWhenCategoryDoesNotExistForThisUser() {
+        when(repository.findByIdAndUserId(99L, USER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.get(99L))
+        assertThatThrownBy(() -> service.get(USER, 99L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("99");
     }
 
     @Test
     void renameToSameNameDoesNotCheckDuplicates() {
-        Category category = new Category("Mercado", TransactionType.EXPENSE);
-        when(repository.findById(1L)).thenReturn(Optional.of(category));
+        Category category = new Category(USER, "Mercado", TransactionType.EXPENSE);
+        when(repository.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(category));
 
-        CategoryResponse response = service.rename(1L, new UpdateCategoryRequest("Mercado"));
+        CategoryResponse response = service.rename(USER, 1L, new UpdateCategoryRequest("Mercado"));
 
         assertThat(response.name()).isEqualTo("Mercado");
-        verify(repository, never()).existsByName(any());
+        verify(repository, never()).existsByUserIdAndName(anyLong(), any());
     }
 
     @Test
     void renameRejectsNameOfAnotherCategory() {
-        Category category = new Category("Mercado", TransactionType.EXPENSE);
-        when(repository.findById(1L)).thenReturn(Optional.of(category));
-        when(repository.existsByName("Transporte")).thenReturn(true);
+        Category category = new Category(USER, "Mercado", TransactionType.EXPENSE);
+        when(repository.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(category));
+        when(repository.existsByUserIdAndName(USER, "Transporte")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.rename(1L, new UpdateCategoryRequest("Transporte")))
+        assertThatThrownBy(() -> service.rename(USER, 1L, new UpdateCategoryRequest("Transporte")))
                 .isInstanceOf(ConflictException.class);
         assertThat(category.getName()).isEqualTo("Mercado");
     }
