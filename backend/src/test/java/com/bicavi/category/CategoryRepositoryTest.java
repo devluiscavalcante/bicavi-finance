@@ -1,9 +1,11 @@
 package com.bicavi.category;
 
+import com.bicavi.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -11,10 +13,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // @DataJpaTest sobe só a camada de persistência (JPA + Flyway) e desfaz
-// (rollback) cada teste ao final. replace = NONE usa o PostgreSQL real
-// em vez de tentar trocar por um banco em memória.
+// (rollback) cada teste ao final. O banco é um PostgreSQL descartável
+// (Testcontainers); replace = NONE impede a troca por um banco em memória.
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(TestcontainersConfiguration.class)
 class CategoryRepositoryTest {
 
     @Autowired
