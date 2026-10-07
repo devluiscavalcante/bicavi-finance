@@ -46,7 +46,11 @@ public class CategoryService {
         String newName = request.name().trim();
 
         if (!newName.equals(category.getName())) {
-            ensureNameIsFree(userId, newName);
+            // Só mudou maiúsculas/minúsculas ("mercado" -> "Mercado"): o nome já é
+            // desta própria categoria. Checar duplicidade a encontraria e daria 409.
+            if (!newName.equalsIgnoreCase(category.getName())) {
+                ensureNameIsFree(userId, newName);
+            }
             // Não precisa chamar save(): dentro da transação, o JPA detecta
             // a mudança no objeto e faz o UPDATE no commit ("dirty checking").
             category.rename(newName);
@@ -66,7 +70,7 @@ public class CategoryService {
     }
 
     private void ensureNameIsFree(Long userId, String name) {
-        if (repository.existsByUserIdAndName(userId, name)) {
+        if (repository.existsByUserIdAndNameIgnoreCase(userId, name)) {
             throw new ConflictException("Já existe uma categoria com o nome '" + name + "'");
         }
     }

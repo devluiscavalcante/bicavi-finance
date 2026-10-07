@@ -35,7 +35,7 @@ class CategoryServiceTest {
 
     @Test
     void createTrimsNameAndSavesForTheLoggedUser() {
-        when(repository.existsByUserIdAndName(USER, "Mercado")).thenReturn(false);
+        when(repository.existsByUserIdAndNameIgnoreCase(USER, "Mercado")).thenReturn(false);
         when(repository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CategoryResponse response = service.create(USER, new CreateCategoryRequest("  Mercado  ", TransactionType.EXPENSE));
@@ -47,7 +47,7 @@ class CategoryServiceTest {
 
     @Test
     void createRejectsDuplicateNameOfSameUser() {
-        when(repository.existsByUserIdAndName(USER, "Mercado")).thenReturn(true);
+        when(repository.existsByUserIdAndNameIgnoreCase(USER, "Mercado")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(USER, new CreateCategoryRequest("Mercado", TransactionType.EXPENSE)))
                 .isInstanceOf(ConflictException.class);
@@ -71,14 +71,25 @@ class CategoryServiceTest {
         CategoryResponse response = service.rename(USER, 1L, new UpdateCategoryRequest("Mercado"));
 
         assertThat(response.name()).isEqualTo("Mercado");
-        verify(repository, never()).existsByUserIdAndName(anyLong(), any());
+        verify(repository, never()).existsByUserIdAndNameIgnoreCase(anyLong(), any());
+    }
+
+    @Test
+    void renameChangingOnlyCaseDoesNotConflictWithItself() {
+        Category category = new Category(USER, "cartão bb", TransactionType.EXPENSE);
+        when(repository.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(category));
+
+        CategoryResponse response = service.rename(USER, 1L, new UpdateCategoryRequest("Cartão BB"));
+
+        assertThat(response.name()).isEqualTo("Cartão BB");
+        verify(repository, never()).existsByUserIdAndNameIgnoreCase(anyLong(), any());
     }
 
     @Test
     void renameRejectsNameOfAnotherCategory() {
         Category category = new Category(USER, "Mercado", TransactionType.EXPENSE);
         when(repository.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(category));
-        when(repository.existsByUserIdAndName(USER, "Transporte")).thenReturn(true);
+        when(repository.existsByUserIdAndNameIgnoreCase(USER, "Transporte")).thenReturn(true);
 
         assertThatThrownBy(() -> service.rename(USER, 1L, new UpdateCategoryRequest("Transporte")))
                 .isInstanceOf(ConflictException.class);

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthBackground } from './AuthLayout'
 import { RequireAuth } from './RequireAuth'
+import { CategoriesPage } from './pages/CategoriesPage'
 import { MonthPage } from './pages/MonthPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -20,6 +21,7 @@ function App() {
           <Route path="/cadastro" element={<RegisterPage />} />
         </Route>
         <Route path="/" element={<RequireAuth><MonthPage /></RequireAuth>} />
+        <Route path="/categorias" element={<RequireAuth><CategoriesPage /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

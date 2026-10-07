@@ -85,13 +85,42 @@ class CategoryRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    // A checagem do service (exists) e a barreira final do banco (índice da V6)
+    // precisam concordar: as duas ignoram maiúsculas/minúsculas.
+    @Test
+    void existsIgnoresCase() {
+        repository.saveAndFlush(new Category(alice, "Cartão de Crédito BB", TransactionType.EXPENSE));
+
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(alice, "cartão de crédito bb")).isTrue();
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(alice, "CARTÃO DE CRÉDITO BB")).isTrue();
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(bob, "cartão de crédito bb")).isFalse();
+    }
+
+    @Test
+    void rejectsSameNameWithDifferentCaseForSameUser() {
+        repository.saveAndFlush(new Category(alice, "Cartão de Crédito BB", TransactionType.EXPENSE));
+
+        assertThatThrownBy(() -> repository.saveAndFlush(
+                new Category(alice, "Cartão de crédito BB", TransactionType.EXPENSE)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_categories_user_lower_name");
+    }
+
+    @Test
+    void allowsSameNameWithDifferentCaseForDifferentUsers() {
+        repository.saveAndFlush(new Category(alice, "Mercado", TransactionType.EXPENSE));
+        repository.saveAndFlush(new Category(bob, "MERCADO", TransactionType.EXPENSE));
+
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(bob, "mercado")).isTrue();
+    }
+
     @Test
     void allowsSameNameForDifferentUsers() {
         repository.saveAndFlush(new Category(alice, "Mercado", TransactionType.EXPENSE));
         repository.saveAndFlush(new Category(bob, "Mercado", TransactionType.EXPENSE));
 
-        assertThat(repository.existsByUserIdAndName(alice, "Mercado")).isTrue();
-        assertThat(repository.existsByUserIdAndName(bob, "Mercado")).isTrue();
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(alice, "Mercado")).isTrue();
+        assertThat(repository.existsByUserIdAndNameIgnoreCase(bob, "Mercado")).isTrue();
     }
 
     @Test

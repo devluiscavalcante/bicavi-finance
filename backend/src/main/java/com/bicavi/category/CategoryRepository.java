@@ -15,5 +15,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByIdAndUserId(Long id, Long userId);
 
-    boolean existsByUserIdAndName(Long userId, String name);
+    // IgnoreCase: o Spring Data gera "UPPER(name) = UPPER(?)", então "Mercado"
+    // e "mercado" contam como o mesmo nome (o índice da V6 garante o mesmo no banco).
+    boolean existsByUserIdAndNameIgnoreCase(Long userId, String name);
 }

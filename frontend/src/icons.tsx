@@ -38,3 +38,27 @@ export const Wallet = () => (
 export const Plus = () => <Icon><path d="M12 5v14" /><path d="M5 12h14" /></Icon>
 
 export const Close = () => <Icon><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>
+
+export const Tag = () => (
+  <Icon>
+    <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" />
+    <circle cx="7.5" cy="7.5" r="1" fill="currentColor" />
+  </Icon>
+)
+
+export const Pencil = () => (
+  <Icon>
+    <path d="M21.2 6.8a2.8 2.8 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z" />
+    <path d="m15 5 4 4" />
+  </Icon>
+)
+
+export const Trash = () => (
+  <Icon>
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </Icon>
+)
+
+export const Check = () => <Icon><path d="M20 6 9 17l-5-5" /></Icon>

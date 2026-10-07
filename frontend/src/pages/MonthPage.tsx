@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import {
   addMonths, currentMonth, formatDay, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
   monthOf,
 } from '../format'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Wallet } from '../icons'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Tag, Wallet } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
 import type { MonthlySummaryResponse, TransactionResponse, UserResponse } from '../types'
 
@@ -93,6 +93,9 @@ export function MonthPage() {
           <small>Olá,</small>
           <strong>{user?.name ?? '...'}</strong>
         </div>
+        <Link to="/categorias" className="icon-btn" aria-label="Categorias" title="Categorias">
+          <Tag />
+        </Link>
         <button className="icon-btn" onClick={handleLogout} aria-label="Sair" title="Sair">
           <LogOut />
         </button>

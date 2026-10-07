@@ -883,3 +883,203 @@ select:focus {
     background: var(--surface-2);
   }
 }
+
+/* ---------- Categorias ---------- */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* <Link> com aparência de botão redondo. */
+a.icon-btn {
+  text-decoration: none;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.inline-form {
+  flex-direction: row; /* sobrescreve o "column" da regra global de form */
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline-form .btn-primary {
+  padding: 12px 16px;
+}
+
+.category-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 -8px;
+}
+
+.category-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.category-row:hover {
+  background: var(--surface-2);
+}
+
+.category-row > form {
+  flex: 1;
+}
+
+.category-row > .field-error {
+  flex-basis: 100%;
+}
+
+.category-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.category-name .tx-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Variante "fantasma": sem fundo nem borda até passar o mouse. */
+.icon-btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  backdrop-filter: none;
+}
+
+.icon-btn.ghost:hover {
+  background: var(--surface-solid);
+  color: var(--text);
+}
+
+.icon-btn.ghost.danger:hover {
+  color: var(--expense);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ---------- Caixa de confirmação ---------- */
+.confirm {
+  width: calc(100% - 32px);
+  max-width: 380px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+}
+
+.confirm[open] {
+  animation: confirm-in 0.3s var(--ease);
+}
+
+.confirm::backdrop {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+.confirm-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.confirm-body h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.confirm-body p:not(.error) {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-secondary,
+.btn-danger {
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  transition: background 0.2s, transform 0.15s var(--ease);
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-danger {
+  background: var(--expense);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  filter: brightness(0.92);
+}
+
+.btn-secondary:active,
+.btn-danger:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
