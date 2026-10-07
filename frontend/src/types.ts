@@ -43,3 +43,19 @@ export interface MonthlySummaryResponse {
   balance: number
   expensesByCategory: CategoryTotal[]
 }
+
+export interface CategoryResponse {
+  id: number
+  name: string
+  type: TransactionType
+}
+
+// Corpo do POST /api/transactions.
+export interface TransactionRequest {
+  amount: number
+  type: TransactionType
+  paymentMethod: PaymentMethod | null
+  categoryId: number | null
+  description: string | null
+  occurredOn: string
+}

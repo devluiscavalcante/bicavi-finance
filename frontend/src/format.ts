@@ -53,3 +53,30 @@ export function formatPaymentMethod(method: PaymentMethod): string {
 function toMonthString(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
+
+export const PAYMENT_METHODS = Object.keys(PAYMENT_LABELS) as PaymentMethod[]
+
+// Data de hoje no formato da API ("2026-10-07"), pelo relógio LOCAL.
+export function todayIso(): string {
+  const now = new Date()
+  return `${toMonthString(now.getFullYear(), now.getMonth() + 1)}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+// "2026-10-07" -> "2026-10"
+export function monthOf(isoDate: string): string {
+  return isoDate.slice(0, 7)
+}
+
+// Texto digitado -> número para a API, ou null se inválido.
+// Aceita "30", "30,5", "30.50". Recusa separador de milhar ("1.234,56"),
+// mais de 2 casas e mais de 10 dígitos inteiros (o mesmo @Digits do backend).
+// Converter para number é seguro: até 15 dígitos significativos o double
+// representa o decimal sem perda, e aqui são no máximo 12.
+export function parseAmount(text: string): number | null {
+  const normalized = text.trim().replace(',', '.')
+  if (!/^\d{1,10}(\.\d{1,2})?$/.test(normalized)) {
+    return null
+  }
+  const value = Number(normalized)
+  return value > 0 ? value : null
+}

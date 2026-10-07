@@ -659,3 +659,227 @@ button {
     transition: none !important;
   }
 }
+
+/* ---------- Nova transação ---------- */
+
+/* Botão flutuante "+" no canto inferior. */
+.fab {
+  position: fixed;
+  right: max(20px, calc(50% - 240px + 20px)); /* alinha com a coluna de 480px */
+  bottom: 24px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+  transition: transform 0.2s var(--ease), background 0.2s;
+  animation: pop-in 0.5s var(--ease) 0.3s both;
+}
+
+.fab:hover {
+  background: var(--primary-hover);
+  transform: rotate(90deg);
+}
+
+.fab:active {
+  transform: scale(0.92);
+}
+
+.fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* Espaço no fim da página para o "+" não cobrir a última transação. */
+main:has(.fab) {
+  padding-bottom: 96px;
+}
+
+/* Painel: <dialog> preso na parte de baixo da tela. */
+.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 92dvh;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 0.15);
+}
+
+.sheet[open] {
+  animation: sheet-up 0.4s var(--ease);
+}
+
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.sheet-body {
+  padding: 8px 20px 28px;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border);
+  margin: 0 auto 12px;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sheet-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Seletor Despesa | Receita */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.segmented button {
+  padding: 10px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.segmented button.active {
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+/* Campo de valor em destaque */
+.amount-input {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  transition: border-color 0.2s;
+}
+
+.amount-input:focus-within {
+  border-color: var(--text);
+}
+
+.amount-input span {
+  font-size: 1.25rem;
+  color: var(--muted);
+}
+
+.amount-input input {
+  flex: 1;
+  min-width: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+  box-shadow: none;
+}
+
+/* Formas de pagamento */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 8px 14px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.chip:hover {
+  border-color: var(--muted);
+}
+
+.chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+select {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  outline: none;
+}
+
+select:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 4px var(--surface-2);
+}
+
+/* Linha recém-criada pisca de leve para o usuário achar onde ela entrou. */
+.transactions li.just-added {
+  animation: highlight 1.6s ease;
+}
+
+@keyframes highlight {
+  0%,
+  30% {
+    background: var(--surface-2);
+  }
+}

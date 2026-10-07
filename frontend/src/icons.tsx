@@ -34,3 +34,7 @@ export const Wallet = () => (
     <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
   </Icon>
 )
+
+export const Plus = () => <Icon><path d="M12 5v14" /><path d="M5 12h14" /></Icon>
+
+export const Close = () => <Icon><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>

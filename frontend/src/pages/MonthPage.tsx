@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import {
   addMonths, currentMonth, formatDay, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
+  monthOf,
 } from '../format'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Wallet } from '../icons'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Wallet } from '../icons'
+import { TransactionSheet } from '../TransactionSheet'
 import type { MonthlySummaryResponse, TransactionResponse, UserResponse } from '../types'
 
 interface MonthData {
@@ -24,6 +26,11 @@ export function MonthPage() {
 
   const [user, setUser] = useState<UserResponse | null>(null)
   const [result, setResult] = useState<MonthResult | null>(null)
+  // Incrementar força o efeito de busca a rodar de novo para o MESMO mês.
+  const [reloadKey, setReloadKey] = useState(0)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Transação recém-criada, destacada por um instante na lista.
+  const [highlightId, setHighlightId] = useState<number | null>(null)
 
   // Derivado, não armazenado: se o resultado é de outro mês, o atual ainda está
   // carregando. Assim não precisamos "zerar" o estado ao trocar de mês.
@@ -54,7 +61,7 @@ export function MonthPage() {
     return () => {
       ignore = true
     }
-  }, [month])
+  }, [month, reloadKey])
 
   function goToMonth(delta: number) {
     setSearchParams({ month: addMonths(month, delta) })
@@ -63,6 +70,19 @@ export function MonthPage() {
   function handleLogout() {
     clearToken()
     navigate('/login', { replace: true })
+  }
+
+  // Depois de salvar, mostra o mês DA TRANSAÇÃO (pode ser outro, se a data foi
+  // alterada). Os totais vêm de novo da API: o frontend não soma nada.
+  function handleSaved(tx: TransactionResponse) {
+    setSheetOpen(false)
+    setHighlightId(tx.id)
+    const target = monthOf(tx.occurredOn)
+    if (target !== month) {
+      setSearchParams({ month: target })
+    } else {
+      setReloadKey(k => k + 1)
+    }
   }
 
   return (
@@ -90,7 +110,14 @@ export function MonthPage() {
 
       {!current && <MonthSkeleton />}
       {current && 'error' in current && <p className="error">{current.error}</p>}
-      {current && 'data' in current && <MonthContent data={current.data} />}
+      {current && 'data' in current && <MonthContent data={current.data} highlightId={highlightId} />}
+
+      <button className="fab" onClick={() => setSheetOpen(true)} aria-label="Nova transação"
+              title="Nova transação">
+        <Plus />
+      </button>
+
+      {sheetOpen && <TransactionSheet onClose={() => setSheetOpen(false)} onSaved={handleSaved} />}
     </main>
   )
 }
@@ -104,7 +131,10 @@ function MonthSkeleton() {
   )
 }
 
-function MonthContent({ data: { summary, transactions } }: { data: MonthData }) {
+function MonthContent({ data: { summary, transactions }, highlightId }: {
+  data: MonthData
+  highlightId: number | null
+}) {
   return (
     <>
       <section className="hero reveal">
@@ -157,6 +187,7 @@ function MonthContent({ data: { summary, transactions } }: { data: MonthData }) 
           <div className="empty">
             <Wallet />
             <p>Nenhuma transação neste mês.</p>
+            <small>Toque no + para adicionar.</small>
           </div>
         ) : (
           <ul className="transactions">
@@ -165,7 +196,8 @@ function MonthContent({ data: { summary, transactions } }: { data: MonthData }) 
               // Linhas entram em cascata; o teto de 12 evita esperar demais em listas longas.
               const delay = 200 + Math.min(i, 12) * 40
               return (
-                <li key={tx.id} className="reveal" style={{ animationDelay: `${delay}ms` }}>
+                <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
+                    style={{ animationDelay: `${delay}ms` }}>
                   <span className={`tx-icon ${kind}`}>
                     {tx.type === 'INCOME' ? <ArrowUp /> : <ArrowDown />}
                   </span>
