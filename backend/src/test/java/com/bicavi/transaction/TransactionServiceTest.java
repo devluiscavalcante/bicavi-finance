@@ -4,9 +4,11 @@ import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.period.PeriodPolicy;
+import com.bicavi.period.TestClocks;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -21,13 +23,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
 
     private static final Long USER = 1L;
+    // "Hoje" nos testes: outubro aberto, setembro já fechado (passou do dia 5).
     private static final LocalDate DAY = LocalDate.of(2026, 10, 6);
+    private static final LocalDate CLOSED_DAY = LocalDate.of(2026, 9, 15);
 
     @Mock
     private TransactionRepository transactions;
@@ -35,17 +40,28 @@ class TransactionServiceTest {
     @Mock
     private CategoryRepository categories;
 
-    @InjectMocks
     private TransactionService service;
+
+    @BeforeEach
+    void createService() {
+        service = new TransactionService(transactions, categories, new PeriodPolicy(TestClocks.at(DAY)));
+    }
 
     @Test
     void listConvertsMonthIntoHalfOpenIntervalForTheUser() {
         when(transactions.findInPeriod(any(), any(), any(), any())).thenReturn(List.of());
 
-        service.list(USER, YearMonth.of(2026, 2), null);
+        service.list(USER, YearMonth.of(2027, 2), null);
 
-        // Fevereiro de 2026 tem 28 dias: o fim exclusivo é 01/03.
-        verify(transactions).findInPeriod(USER, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 3, 1), null);
+        // Fevereiro de 2027 tem 28 dias: o fim exclusivo é 01/03.
+        verify(transactions).findInPeriod(USER, LocalDate.of(2027, 2, 1), LocalDate.of(2027, 3, 1), null);
+    }
+
+    @Test
+    void listRejectsMonthOlderThanTheConsultationWindow() {
+        assertThatThrownBy(() -> service.list(USER, YearMonth.of(2026, 3), null))
+                .isInstanceOf(BusinessRuleException.class);
+        verifyNoInteractions(transactions);
     }
 
     @Test
@@ -87,6 +103,26 @@ class TransactionServiceTest {
     }
 
     @Test
+    void createInFutureMonthIsAllowed() {
+        // Salário ou parcela planejados com meses de antecedência.
+        when(transactions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TransactionResponse response = service.create(USER,
+                new TransactionRequest(new BigDecimal("5000"), TransactionType.INCOME, null, null, "Salário", LocalDate.of(2027, 3, 5)));
+
+        assertThat(response.occurredOn()).isEqualTo(LocalDate.of(2027, 3, 5));
+    }
+
+    @Test
+    void createInClosedMonthIsRejected() {
+        assertThatThrownBy(() -> service.create(USER,
+                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, CLOSED_DAY)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("09/2026 está fechado");
+        verify(transactions, never()).save(any());
+    }
+
+    @Test
     void updateChangesAllFields() {
         Transaction existing = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, "antigo", DAY);
         Category salary = new Category(USER, "Salário", TransactionType.INCOME);
@@ -109,5 +145,56 @@ class TransactionServiceTest {
         assertThatThrownBy(() -> service.update(USER, 99L,
                 new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY)))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void updateOfTransactionInClosedMonthIsRejected() {
+        Transaction old = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, CLOSED_DAY);
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(old));
+
+        // Mesmo levando a data para um mês aberto: tirar do mês fechado também é alterá-lo.
+        assertThatThrownBy(() -> service.update(USER, 1L,
+                new TransactionRequest(new BigDecimal("20"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY)))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(old.getAmount()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    void updateMovingTransactionIntoClosedMonthIsRejected() {
+        Transaction current = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY);
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(current));
+
+        assertThatThrownBy(() -> service.update(USER, 1L,
+                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, CLOSED_DAY)))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(current.getOccurredOn()).isEqualTo(DAY);
+    }
+
+    @Test
+    void deleteInOpenMonthRemovesTransaction() {
+        Transaction current = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY);
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(current));
+
+        service.delete(USER, 1L);
+
+        verify(transactions).delete(current);
+    }
+
+    @Test
+    void deleteInClosedMonthIsRejected() {
+        Transaction old = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, CLOSED_DAY);
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(old));
+
+        assertThatThrownBy(() -> service.delete(USER, 1L)).isInstanceOf(BusinessRuleException.class);
+        verify(transactions, never()).delete(any());
+    }
+
+    @Test
+    void transactionOlderThanTheConsultationWindowIsNotFound() {
+        Transaction ancient = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null,
+                LocalDate.of(2026, 3, 31));
+        when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(ancient));
+
+        assertThatThrownBy(() -> service.get(USER, 1L)).isInstanceOf(NotFoundException.class);
     }
 }

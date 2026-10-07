@@ -3,11 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import {
   addMonths, currentMonth, formatDay, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
-  monthOf,
+  monthOf, todayIso,
 } from '../format'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Tag, Wallet } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
-import type { MonthlySummaryResponse, TransactionResponse, UserResponse } from '../types'
+import type {
+  MonthlySummaryResponse, PeriodResponse, TransactionResponse, UserResponse,
+} from '../types'
 
 interface MonthData {
   summary: MonthlySummaryResponse
@@ -17,6 +19,9 @@ interface MonthData {
 // Resultado da última busca, junto com o mês a que ele pertence.
 type MonthResult = { month: string } & ({ data: MonthData } | { error: string })
 
+// Painel fechado, aberto para criar, ou aberto editando uma transação.
+type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
+
 export function MonthPage() {
   const navigate = useNavigate()
   // O mês fica na URL (/?month=2026-09): sobrevive ao F5 e ao botão "voltar".
@@ -25,19 +30,26 @@ export function MonthPage() {
   const month = isValidMonth(monthParam) ? monthParam : currentMonth()
 
   const [user, setUser] = useState<UserResponse | null>(null)
+  const [period, setPeriod] = useState<PeriodResponse | null>(null)
   const [result, setResult] = useState<MonthResult | null>(null)
   // Incrementar força o efeito de busca a rodar de novo para o MESMO mês.
   const [reloadKey, setReloadKey] = useState(0)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  // Transação recém-criada, destacada por um instante na lista.
+  const [sheet, setSheet] = useState<SheetState>({ mode: 'closed' })
+  // Transação recém-criada ou editada, destacada por um instante na lista.
   const [highlightId, setHighlightId] = useState<number | null>(null)
 
   // Derivado, não armazenado: se o resultado é de outro mês, o atual ainda está
   // carregando. Assim não precisamos "zerar" o estado ao trocar de mês.
   const current = result?.month === month ? result : null
 
+  // Limites vêm do backend (GET /api/period). Meses "2026-10" comparam como texto.
+  // Enquanto o período não chega, nada é editável (o "+" só aparece depois).
+  const editable = period !== null && month >= period.firstEditableMonth
+  const canGoBack = period === null || month > period.oldestVisibleMonth
+
   useEffect(() => {
     api<UserResponse>('/api/me').then(setUser).catch(() => {})
+    api<PeriodResponse>('/api/period').then(setPeriod).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -75,7 +87,7 @@ export function MonthPage() {
   // Depois de salvar, mostra o mês DA TRANSAÇÃO (pode ser outro, se a data foi
   // alterada). Os totais vêm de novo da API: o frontend não soma nada.
   function handleSaved(tx: TransactionResponse) {
-    setSheetOpen(false)
+    setSheet({ mode: 'closed' })
     setHighlightId(tx.id)
     const target = monthOf(tx.occurredOn)
     if (target !== month) {
@@ -84,6 +96,14 @@ export function MonthPage() {
       setReloadKey(k => k + 1)
     }
   }
+
+  function handleDeleted() {
+    setSheet({ mode: 'closed' })
+    setReloadKey(k => k + 1)
+  }
+
+  // Nova transação olhando outro mês (ex.: planejando dezembro): começa no dia 1º dele.
+  const defaultDate = month === currentMonth() ? todayIso() : `${month}-01`
 
   return (
     <main>
@@ -102,10 +122,14 @@ export function MonthPage() {
       </header>
 
       <nav className="month-nav">
-        <button className="icon-btn" onClick={() => goToMonth(-1)} aria-label="Mês anterior">
+        <button className="icon-btn" onClick={() => goToMonth(-1)} aria-label="Mês anterior"
+                disabled={!canGoBack}>
           <ChevronLeft />
         </button>
-        <h1>{formatMonth(month)}</h1>
+        <div className="month-title">
+          <h1>{formatMonth(month)}</h1>
+          {period && !editable && <span className="badge">Somente leitura</span>}
+        </div>
         <button className="icon-btn" onClick={() => goToMonth(1)} aria-label="Próximo mês">
           <ChevronRight />
         </button>
@@ -113,14 +137,32 @@ export function MonthPage() {
 
       {!current && <MonthSkeleton />}
       {current && 'error' in current && <p className="error">{current.error}</p>}
-      {current && 'data' in current && <MonthContent data={current.data} highlightId={highlightId} />}
+      {current && 'data' in current && (
+        <MonthContent
+          data={current.data}
+          highlightId={highlightId}
+          editable={editable}
+          onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
+        />
+      )}
 
-      <button className="fab" onClick={() => setSheetOpen(true)} aria-label="Nova transação"
-              title="Nova transação">
-        <Plus />
-      </button>
+      {editable && (
+        <button className="fab" onClick={() => setSheet({ mode: 'create' })} aria-label="Nova transação"
+                title="Nova transação">
+          <Plus />
+        </button>
+      )}
 
-      {sheetOpen && <TransactionSheet onClose={() => setSheetOpen(false)} onSaved={handleSaved} />}
+      {sheet.mode !== 'closed' && period && (
+        <TransactionSheet
+          transaction={sheet.mode === 'edit' ? sheet.transaction : undefined}
+          defaultDate={defaultDate}
+          period={period}
+          onClose={() => setSheet({ mode: 'closed' })}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />
+      )}
     </main>
   )
 }
@@ -134,9 +176,11 @@ function MonthSkeleton() {
   )
 }
 
-function MonthContent({ data: { summary, transactions }, highlightId }: {
+function MonthContent({ data: { summary, transactions }, highlightId, editable, onSelect }: {
   data: MonthData
   highlightId: number | null
+  editable: boolean
+  onSelect: (tx: TransactionResponse) => void
 }) {
   return (
     <>
@@ -190,7 +234,7 @@ function MonthContent({ data: { summary, transactions }, highlightId }: {
           <div className="empty">
             <Wallet />
             <p>Nenhuma transação neste mês.</p>
-            <small>Toque no + para adicionar.</small>
+            {editable && <small>Toque no + para adicionar.</small>}
           </div>
         ) : (
           <ul className="transactions">
@@ -198,9 +242,8 @@ function MonthContent({ data: { summary, transactions }, highlightId }: {
               const kind = tx.type === 'INCOME' ? 'income' : 'expense'
               // Linhas entram em cascata; o teto de 12 evita esperar demais em listas longas.
               const delay = 200 + Math.min(i, 12) * 40
-              return (
-                <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
-                    style={{ animationDelay: `${delay}ms` }}>
+              const content = (
+                <>
                   <span className={`tx-icon ${kind}`}>
                     {tx.type === 'INCOME' ? <ArrowUp /> : <ArrowDown />}
                   </span>
@@ -216,6 +259,20 @@ function MonthContent({ data: { summary, transactions }, highlightId }: {
                   <span className={`tx-amount ${kind}`}>
                     {tx.type === 'INCOME' ? '+' : '−'} {formatMoney(tx.amount)}
                   </span>
+                </>
+              )
+              return (
+                <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
+                    style={{ animationDelay: `${delay}ms` }}>
+                  {/* Mês aberto: a linha é um <button> (teclado e leitor de tela funcionam).
+                      Mês fechado: só texto, nada para clicar. */}
+                  {editable ? (
+                    <button type="button" className="tx-row" onClick={() => onSelect(tx)}>
+                      {content}
+                    </button>
+                  ) : (
+                    <div className="tx-row">{content}</div>
+                  )}
                 </li>
               )
             })}

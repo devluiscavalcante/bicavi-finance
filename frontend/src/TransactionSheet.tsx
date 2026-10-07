@@ -1,33 +1,42 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from './api'
-import { formatPaymentMethod, parseAmount, PAYMENT_METHODS, todayIso } from './format'
+import { ConfirmDialog } from './ConfirmDialog'
+import { formatPaymentMethod, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
 import type {
-  CategoryResponse, PaymentMethod, TransactionRequest, TransactionResponse, TransactionType,
+  CategoryResponse, PaymentMethod, PeriodResponse, TransactionRequest, TransactionResponse, TransactionType,
 } from './types'
 
-// Painel que sobe por baixo com o formulário de nova transação.
+// Painel que sobe por baixo com o formulário de transação: cria uma nova ou,
+// se receber `transaction`, edita/exclui a existente.
 // Usa o <dialog> nativo: showModal() já prende o foco, fecha com Esc,
 // escurece o fundo e deixa a página de trás inacessível.
 // O pai só renderiza este componente enquanto o painel está aberto,
-// então todo o estado do formulário começa zerado a cada abertura.
-export function TransactionSheet({ onClose, onSaved }: {
+// então todo o estado do formulário começa do zero a cada abertura.
+export function TransactionSheet({ transaction, defaultDate, period, onClose, onSaved, onDeleted }: {
+  transaction?: TransactionResponse // ausente = nova transação
+  defaultDate: string // data inicial de uma transação nova
+  period: PeriodResponse
   onClose: () => void
   onSaved: (tx: TransactionResponse) => void
+  onDeleted: () => void
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const editing = transaction !== undefined
 
-  const [type, setType] = useState<TransactionType>('EXPENSE')
-  const [amountText, setAmountText] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
-  const [categoryId, setCategoryId] = useState('') // '' = sem categoria
-  const [description, setDescription] = useState('')
-  const [occurredOn, setOccurredOn] = useState(todayIso)
+  const [type, setType] = useState<TransactionType>(transaction?.type ?? 'EXPENSE')
+  // 30.5 -> "30,5": o mesmo formato que a pessoa digitaria.
+  const [amountText, setAmountText] = useState(transaction ? String(transaction.amount).replace('.', ',') : '')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(transaction?.paymentMethod ?? null)
+  const [categoryId, setCategoryId] = useState(transaction?.categoryId?.toString() ?? '') // '' = sem categoria
+  const [description, setDescription] = useState(transaction?.description ?? '')
+  const [occurredOn, setOccurredOn] = useState(transaction?.occurredOn ?? defaultDate)
   const [categories, setCategories] = useState<CategoryResponse[]>([])
 
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -85,10 +94,11 @@ export function TransactionSheet({ onClose, onSaved }: {
 
     setSaving(true)
     try {
-      const saved = await api<TransactionResponse>('/api/transactions', {
-        method: 'POST',
-        body: JSON.stringify(request),
-      })
+      // PUT substitui todos os campos (mesmo TransactionRequest do POST).
+      const saved = await api<TransactionResponse>(
+        editing ? `/api/transactions/${transaction.id}` : '/api/transactions',
+        { method: editing ? 'PUT' : 'POST', body: JSON.stringify(request) },
+      )
       onSaved(saved)
     } catch (e) {
       if (e instanceof ApiError) {
@@ -101,6 +111,12 @@ export function TransactionSheet({ onClose, onSaved }: {
     }
   }
 
+  async function handleDelete() {
+    // Erro aqui é exibido pelo próprio ConfirmDialog.
+    await api<void>(`/api/transactions/${transaction!.id}`, { method: 'DELETE' })
+    onDeleted()
+  }
+
   const categoriesOfType = categories.filter(c => c.type === type)
 
   return (
@@ -108,8 +124,12 @@ export function TransactionSheet({ onClose, onSaved }: {
       ref={dialogRef}
       className="sheet"
       aria-labelledby="sheet-title"
-      // Esc ou dialog.close(): avisa o pai, que desmonta o componente.
-      onClose={onClose}
+      // O evento "close" do ConfirmDialog (que fica dentro deste componente)
+      // também chega aqui pela árvore do React: sem o teste do alvo, cancelar
+      // a exclusão fecharia o painel inteiro.
+      onClose={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
       // Clique no fundo escurecido: o alvo é o próprio <dialog> (o conteúdo
       // fica dentro de .sheet-body, que ocupa todo o painel).
       onClick={e => {
@@ -119,7 +139,7 @@ export function TransactionSheet({ onClose, onSaved }: {
       <div className="sheet-body">
         <div className="sheet-handle" aria-hidden="true" />
         <header className="sheet-header">
-          <h2 id="sheet-title">Nova transação</h2>
+          <h2 id="sheet-title">{editing ? 'Editar transação' : 'Nova transação'}</h2>
           <button type="button" className="icon-btn" aria-label="Fechar"
                   onClick={() => dialogRef.current?.close()}>
             <Close />
@@ -142,7 +162,7 @@ export function TransactionSheet({ onClose, onSaved }: {
               <span>R$</span>
               {/* inputMode="decimal": no celular abre o teclado numérico com vírgula. */}
               <input inputMode="decimal" placeholder="0,00" value={amountText}
-                     onChange={e => setAmountText(e.target.value)} autoFocus />
+                     onChange={e => setAmountText(e.target.value)} autoFocus={!editing} />
             </div>
           </label>
           {fieldErrors.amount && <p className="field-error">{fieldErrors.amount}</p>}
@@ -182,16 +202,34 @@ export function TransactionSheet({ onClose, onSaved }: {
 
           <label>
             Data
-            <input type="date" value={occurredOn} onChange={e => setOccurredOn(e.target.value)} required />
+            {/* min: o seletor de data não oferece meses fechados. O backend recusa de qualquer jeito. */}
+            <input type="date" value={occurredOn} min={`${period.firstEditableMonth}-01`}
+                   onChange={e => setOccurredOn(e.target.value)} required />
           </label>
           {fieldErrors.occurredOn && <p className="field-error">{fieldErrors.occurredOn}</p>}
 
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
+            {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Salvar'}
           </button>
+          {editing && (
+            <button type="button" className="btn-text-danger" disabled={saving}
+                    onClick={() => setConfirmingDelete(true)}>
+              Excluir transação
+            </button>
+          )}
         </form>
       </div>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Excluir transação?"
+          message="Ela sai da lista e dos totais do mês. Esta ação não pode ser desfeita."
+          confirmLabel="Excluir"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </dialog>
   )
 }

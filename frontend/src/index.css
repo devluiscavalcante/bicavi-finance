@@ -568,16 +568,31 @@ button {
 }
 
 .transactions li {
+  border-radius: var(--radius-sm);
+}
+
+/* A linha é um <button> em mês aberto e um <div> em mês fechado: mesmo visual. */
+.tx-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 10px 8px;
   border-radius: var(--radius-sm);
-  transition: background 0.2s;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background 0.2s, transform 0.15s var(--ease);
 }
 
-.transactions li:hover {
+/* Só a linha clicável reage ao mouse/toque. */
+button.tx-row:hover {
   background: var(--surface-2);
+}
+
+button.tx-row:active {
+  transform: scale(0.99);
 }
 
 .tx-icon {
@@ -997,7 +1012,51 @@ a.icon-btn {
   color: var(--expense);
 }
 
+/* Desabilitado: salvando (✓ da categoria) ou sem mês anterior para navegar. */
 .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+  background: var(--surface);
+}
+
+/* Mês + selo "Somente leitura", centralizados entre as setas. */
+.month-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 99px;
+  padding: 3px 10px;
+  animation: fade-in 0.3s ease;
+}
+
+/* "Excluir transação" no painel: discreto, mas em vermelho. */
+.btn-text-danger {
+  background: transparent;
+  color: var(--expense);
+  font-weight: 600;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.btn-text-danger:hover {
+  background: var(--expense-soft);
+}
+
+.btn-text-danger:disabled {
   opacity: 0.5;
   cursor: wait;
 }

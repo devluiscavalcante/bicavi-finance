@@ -11,6 +11,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -31,6 +34,13 @@ class DataIsolationIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    // Relógio REAL da aplicação. As datas dos testes são relativas a "hoje":
+    // datas fixas virariam uma bomba-relógio quando o mês fechasse (PeriodPolicy).
+    @Autowired
+    private Clock clock;
+
+    private String today;  // "2026-10-07"
+    private String month;  // "2026-10"
     private String aliceToken;
     private String bobToken;
     private long aliceCategoryId;
@@ -38,6 +48,8 @@ class DataIsolationIntegrationTest {
 
     @BeforeEach
     void aliceHasDataAndBobExists() throws Exception {
+        today = LocalDate.now(clock).toString();
+        month = YearMonth.now(clock).toString();
         aliceToken = registerAndLogin("alice");
         bobToken = registerAndLogin("bob");
 
@@ -45,8 +57,8 @@ class DataIsolationIntegrationTest {
                 {"name": "Mercado", "type": "EXPENSE"}
                 """);
         aliceTransactionId = createAndGetId(aliceToken, "/api/transactions", """
-                {"amount": 350.00, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "2026-10-06"}
-                """.formatted(aliceCategoryId));
+                {"amount": 350.00, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "%s"}
+                """.formatted(aliceCategoryId, today));
     }
 
     @Test
@@ -78,8 +90,8 @@ class DataIsolationIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(put(path).header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"amount": 0.01, "type": "EXPENSE", "paymentMethod": "PIX", "occurredOn": "2026-10-06"}
-                                """))
+                                {"amount": 0.01, "type": "EXPENSE", "paymentMethod": "PIX", "occurredOn": "%s"}
+                                """.formatted(today)))
                 .andExpect(status().isNotFound());
         mockMvc.perform(delete(path).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isNotFound());
@@ -93,8 +105,8 @@ class DataIsolationIntegrationTest {
     void bobCannotUseAlicesCategoryInHisTransaction() throws Exception {
         mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"amount": 10, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "2026-10-06"}
-                                """.formatted(aliceCategoryId)))
+                                {"amount": 10, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "%s"}
+                                """.formatted(aliceCategoryId, today)))
                 .andExpect(status().isBadRequest())
                 // Mesma mensagem de uma categoria inexistente: não confirma que ela existe.
                 .andExpect(jsonPath("$.detail").value("Categoria " + aliceCategoryId + " não existe"));
@@ -105,14 +117,14 @@ class DataIsolationIntegrationTest {
         mockMvc.perform(get("/api/categories").header("Authorization", bearer(bobToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
-        mockMvc.perform(get("/api/transactions").param("month", "2026-10").header("Authorization", bearer(bobToken)))
+        mockMvc.perform(get("/api/transactions").param("month", month).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
-        mockMvc.perform(get("/api/reports/monthly-summary").param("month", "2026-10").header("Authorization", bearer(bobToken)))
+        mockMvc.perform(get("/api/reports/monthly-summary").param("month", month).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalExpense").value(0.00));
 
-        mockMvc.perform(get("/api/reports/monthly-summary").param("month", "2026-10").header("Authorization", bearer(aliceToken)))
+        mockMvc.perform(get("/api/reports/monthly-summary").param("month", month).header("Authorization", bearer(aliceToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalExpense").value(350.00));
     }
@@ -129,8 +141,8 @@ class DataIsolationIntegrationTest {
     @Test
     void protectedEndpointsRequireToken() throws Exception {
         mockMvc.perform(get("/api/categories")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/transactions").param("month", "2026-10")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/reports/monthly-summary").param("month", "2026-10")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/transactions").param("month", month)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/reports/monthly-summary").param("month", month)).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/categories/" + aliceCategoryId)).andExpect(status().isUnauthorized());
     }

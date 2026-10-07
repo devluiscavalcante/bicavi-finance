@@ -1,6 +1,7 @@
 package com.bicavi.report;
 
 import com.bicavi.category.Category;
+import com.bicavi.period.PeriodPolicy;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
 import com.bicavi.transaction.TransactionType;
@@ -27,13 +28,16 @@ public class ReportService {
     private static final String UNCATEGORIZED = "Sem categoria";
 
     private final TransactionRepository transactions;
+    private final PeriodPolicy period;
 
-    public ReportService(TransactionRepository transactions) {
+    public ReportService(TransactionRepository transactions, PeriodPolicy period) {
         this.transactions = transactions;
+        this.period = period;
     }
 
     @Transactional(readOnly = true)
     public MonthlySummaryResponse monthlySummary(Long userId, YearMonth month) {
+        period.checkVisible(month);
         List<Transaction> all = transactions.findInPeriod(userId, month.atDay(1), month.plusMonths(1).atDay(1), null);
 
         BigDecimal income = sum(all, TransactionType.INCOME);

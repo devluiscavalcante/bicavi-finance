@@ -44,6 +44,13 @@ export interface MonthlySummaryResponse {
   expensesByCategory: CategoryTotal[]
 }
 
+// Limites de período calculados pelo backend (GET /api/period).
+// Meses no formato "2026-10": comparar como texto funciona ("2026-09" < "2026-10").
+export interface PeriodResponse {
+  firstEditableMonth: string // deste mês em diante: criar, editar e excluir
+  oldestVisibleMonth: string // antes disso a API não devolve dados
+}
+
 export interface CategoryResponse {
   id: number
   name: string

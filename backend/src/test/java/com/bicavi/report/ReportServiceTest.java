@@ -1,13 +1,16 @@
 package com.bicavi.report;
 
 import com.bicavi.category.Category;
+import com.bicavi.common.BusinessRuleException;
+import com.bicavi.period.PeriodPolicy;
+import com.bicavi.period.TestClocks;
 import com.bicavi.transaction.PaymentMethod;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
 import com.bicavi.transaction.TransactionType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -17,7 +20,9 @@ import java.time.YearMonth;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,8 +39,20 @@ class ReportServiceTest {
     @Mock
     private TransactionRepository transactions;
 
-    @InjectMocks
     private ReportService service;
+
+    // "Hoje" é 06/10/2026: outubro é o mês atual e a consulta vai até abril.
+    @BeforeEach
+    void createService() {
+        service = new ReportService(transactions, new PeriodPolicy(TestClocks.at(DAY)));
+    }
+
+    @Test
+    void rejectsMonthOlderThanTheConsultationWindow() {
+        assertThatThrownBy(() -> service.monthlySummary(USER, YearMonth.of(2026, 3)))
+                .isInstanceOf(BusinessRuleException.class);
+        verifyNoInteractions(transactions);
+    }
 
     @Test
     void calculatesTotalsAndBalance() {
