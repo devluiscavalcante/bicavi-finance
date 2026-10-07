@@ -45,7 +45,7 @@ class DataIsolationIntegrationTest {
                 {"name": "Mercado", "type": "EXPENSE"}
                 """);
         aliceTransactionId = createAndGetId(aliceToken, "/api/transactions", """
-                {"amount": 350.00, "type": "EXPENSE", "categoryId": %d, "occurredOn": "2026-10-06"}
+                {"amount": 350.00, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "2026-10-06"}
                 """.formatted(aliceCategoryId));
     }
 
@@ -78,7 +78,7 @@ class DataIsolationIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(put(path).header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"amount": 0.01, "type": "EXPENSE", "occurredOn": "2026-10-06"}
+                                {"amount": 0.01, "type": "EXPENSE", "paymentMethod": "PIX", "occurredOn": "2026-10-06"}
                                 """))
                 .andExpect(status().isNotFound());
         mockMvc.perform(delete(path).header("Authorization", bearer(bobToken)))
@@ -93,7 +93,7 @@ class DataIsolationIntegrationTest {
     void bobCannotUseAlicesCategoryInHisTransaction() throws Exception {
         mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"amount": 10, "type": "EXPENSE", "categoryId": %d, "occurredOn": "2026-10-06"}
+                                {"amount": 10, "type": "EXPENSE", "paymentMethod": "PIX", "categoryId": %d, "occurredOn": "2026-10-06"}
                                 """.formatted(aliceCategoryId)))
                 .andExpect(status().isBadRequest())
                 // Mesma mensagem de uma categoria inexistente: não confirma que ela existe.

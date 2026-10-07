@@ -55,7 +55,7 @@ class TransactionServiceTest {
         when(transactions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         TransactionResponse response = service.create(USER,
-                new TransactionRequest(new BigDecimal("35.90"), TransactionType.EXPENSE, 1L, "  Feira  ", DAY));
+                new TransactionRequest(new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, 1L, "  Feira  ", DAY));
 
         assertThat(response.amount()).isEqualByComparingTo("35.90");
         assertThat(response.categoryName()).isEqualTo("Mercado");
@@ -67,7 +67,7 @@ class TransactionServiceTest {
         when(transactions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         TransactionResponse response = service.create(USER,
-                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, null, "  ", DAY));
+                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, "  ", DAY));
 
         assertThat(response.categoryId()).isNull();
         assertThat(response.description()).isNull();
@@ -80,7 +80,7 @@ class TransactionServiceTest {
         when(categories.findByIdAndUserId(99L, USER)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(USER,
-                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, 99L, null, DAY)))
+                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, 99L, null, DAY)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("99");
         verify(transactions, never()).save(any());
@@ -88,13 +88,13 @@ class TransactionServiceTest {
 
     @Test
     void updateChangesAllFields() {
-        Transaction existing = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, "antigo", DAY);
+        Transaction existing = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, "antigo", DAY);
         Category salary = new Category(USER, "Salário", TransactionType.INCOME);
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(existing));
         when(categories.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(salary));
 
         TransactionResponse response = service.update(USER, 1L,
-                new TransactionRequest(new BigDecimal("5000.00"), TransactionType.INCOME, 2L, "novo", DAY.plusDays(1)));
+                new TransactionRequest(new BigDecimal("5000.00"), TransactionType.INCOME, null, 2L, "novo", DAY.plusDays(1)));
 
         assertThat(response.amount()).isEqualByComparingTo("5000.00");
         assertThat(response.type()).isEqualTo(TransactionType.INCOME);
@@ -107,7 +107,7 @@ class TransactionServiceTest {
         when(transactions.findByIdAndUserId(99L, USER)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update(USER, 99L,
-                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, null, null, DAY)))
+                new TransactionRequest(new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY)))
                 .isInstanceOf(NotFoundException.class);
     }
 }

@@ -1,6 +1,7 @@
 package com.bicavi.report;
 
 import com.bicavi.category.Category;
+import com.bicavi.transaction.PaymentMethod;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
 import com.bicavi.transaction.TransactionType;
@@ -112,10 +113,10 @@ class ReportServiceTest {
     }
 
     private static Transaction income(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, null, DAY);
     }
 
     private static Transaction expense(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY);
     }
 }

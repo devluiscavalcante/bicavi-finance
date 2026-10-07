@@ -61,7 +61,7 @@ class TransactionRepositoryTest {
     void savesAndReadsTransactionWithCategory() {
         Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
         Long id = transactions.save(
-                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, "Feira", DAY)).getId();
+                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, "Feira", DAY)).getId();
         flushAndClear();
 
         Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
@@ -82,7 +82,7 @@ class TransactionRepositoryTest {
     void storesMoneyExactly() {
         // Em double, 0.1 + 0.2 = 0.30000000000000004. Com BigDecimal + NUMERIC, é exato.
         BigDecimal amount = new BigDecimal("0.1").add(new BigDecimal("0.2"));
-        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, null, DAY)).getId();
+        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY)).getId();
         flushAndClear();
 
         BigDecimal inDb = jdbc.queryForObject("SELECT amount FROM transactions WHERE id = ?", BigDecimal.class, id);
@@ -108,8 +108,8 @@ class TransactionRepositoryTest {
     void databaseRejectsNonPositiveAmount() {
         // user_id válido: o banco deve recusar por causa do valor, não por falta de dono.
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO transactions (user_id, amount, type, occurred_on, created_at)
-                VALUES (?, 0, 'EXPENSE', DATE '2026-10-06', now())
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, 0, 'EXPENSE', 'PIX', DATE '2026-10-06', now())
                 """, alice))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_transactions_amount_positive");
@@ -118,11 +118,54 @@ class TransactionRepositoryTest {
     @Test
     void databaseRejectsUnknownCategory() {
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO transactions (user_id, category_id, amount, type, occurred_on, created_at)
-                VALUES (?, 999999, 10, 'EXPENSE', DATE '2026-10-06', now())
+                INSERT INTO transactions (user_id, category_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, 999999, 10, 'EXPENSE', 'PIX', DATE '2026-10-06', now())
                 """, alice))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("fk_transactions_category");
+    }
+
+    @Test
+    void savesAndReadsPaymentMethod() {
+        Long id = transactions.save(new Transaction(
+                alice, null, new BigDecimal("30.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, "Caderno", DAY)).getId();
+        flushAndClear();
+
+        // Grava o NOME do enum (EnumType.STRING), não a posição (0, 1, 2...).
+        String inDb = jdbc.queryForObject("SELECT payment_method FROM transactions WHERE id = ?", String.class, id);
+        assertThat(inDb).isEqualTo("CREDITO");
+        assertThat(transactions.findByIdAndUserId(id, alice).orElseThrow().getPaymentMethod())
+                .isEqualTo(PaymentMethod.CREDITO);
+    }
+
+    @Test
+    void databaseRejectsExpenseWithoutPaymentMethod() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, occurred_on, created_at)
+                VALUES (?, 10, 'EXPENSE', DATE '2026-10-06', now())
+                """, alice))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_payment_method_by_type");
+    }
+
+    @Test
+    void databaseRejectsIncomeWithPaymentMethod() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, 5000, 'INCOME', 'PIX', DATE '2026-10-06', now())
+                """, alice))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_payment_method_by_type");
+    }
+
+    @Test
+    void databaseRejectsUnknownPaymentMethod() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, 10, 'EXPENSE', 'CHEQUE', DATE '2026-10-06', now())
+                """, alice))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_payment_method");
     }
 
     @Test
@@ -187,7 +230,7 @@ class TransactionRepositoryTest {
 
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
         return transactions.save(new Transaction(
-                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, description, day)).getId();
+                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, PaymentMethod.PIX, description, day)).getId();
     }
 
     // flush: envia ao banco os comandos SQL pendentes.

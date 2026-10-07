@@ -42,6 +42,7 @@ public class TransactionService {
                 findCategory(userId, request.categoryId()),
                 request.amount(),
                 request.type(),
+                request.paymentMethod(),
                 normalize(request.description()),
                 request.occurredOn());
         return TransactionResponse.from(transactions.save(tx));
@@ -54,6 +55,7 @@ public class TransactionService {
                 findCategory(userId, request.categoryId()),
                 request.amount(),
                 request.type(),
+                request.paymentMethod(),
                 normalize(request.description()),
                 request.occurredOn());
         return TransactionResponse.from(tx);

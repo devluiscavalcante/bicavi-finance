@@ -53,12 +53,13 @@ class TransactionControllerTest {
     @Test
     void listParsesMonthAndPassesLoggedUser() throws Exception {
         when(service.list(USER, YearMonth.of(2026, 10), 3L)).thenReturn(List.of(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6))));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6))));
 
         mockMvc.perform(get("/api/transactions").with(loggedUser()).param("month", "2026-10").param("categoryId", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].amount").value(35.90))
                 .andExpect(jsonPath("$[0].categoryName").value("Mercado"))
+                .andExpect(jsonPath("$[0].paymentMethod").value("PIX"))
                 .andExpect(jsonPath("$[0].occurredOn").value("2026-10-06"));
 
         verify(service).list(USER, YearMonth.of(2026, 10), 3L);
@@ -83,15 +84,29 @@ class TransactionControllerTest {
     @Test
     void createReturns201() throws Exception {
         when(service.create(eq(USER), any())).thenReturn(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, null, null, null, LocalDate.of(2026, 10, 6)));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, LocalDate.of(2026, 10, 6)));
 
         mockMvc.perform(post("/api/transactions").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"amount": 35.90, "type": "EXPENSE", "occurredOn": "2026-10-06"}
+                                {"amount": 35.90, "type": "EXPENSE", "paymentMethod": "PIX", "occurredOn": "2026-10-06"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1));
+
+        verify(service).create(USER, new TransactionRequest(
+                new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, LocalDate.of(2026, 10, 6)));
+    }
+
+    @Test
+    void createWithUnknownPaymentMethodReturns400() throws Exception {
+        mockMvc.perform(post("/api/transactions").with(loggedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount": 10, "type": "EXPENSE", "paymentMethod": "CHEQUE", "occurredOn": "2026-10-06"}
+                                """))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
     }
 
     @Test

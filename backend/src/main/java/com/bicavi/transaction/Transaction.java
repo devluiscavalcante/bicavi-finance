@@ -44,6 +44,12 @@ public class Transaction {
     @Column(nullable = false, length = 10)
     private TransactionType type;
 
+    // null em receitas. A regra "despesa exige, receita não tem" está em validate()
+    // e também num CHECK do banco (V5).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 10)
+    private PaymentMethod paymentMethod;
+
     @Column(length = 255)
     private String description;
 
@@ -57,22 +63,22 @@ public class Transaction {
     }
 
     public Transaction(Long userId, Category category, BigDecimal amount, TransactionType type,
-                       String description, LocalDate occurredOn) {
+                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
         this.userId = userId;
-        apply(category, amount, type, description, occurredOn);
+        apply(category, amount, type, paymentMethod, description, occurredOn);
         this.createdAt = Instant.now();
     }
 
     // Substitui todos os dados editáveis, aplicando as mesmas regras da criação.
     public void update(Category category, BigDecimal amount, TransactionType type,
-                       String description, LocalDate occurredOn) {
-        apply(category, amount, type, description, occurredOn);
+                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
+        apply(category, amount, type, paymentMethod, description, occurredOn);
     }
 
     // private: não pode ser sobrescrito, então é seguro chamar no construtor.
     private void apply(Category category, BigDecimal amount, TransactionType type,
-                       String description, LocalDate occurredOn) {
-        validate(category, amount, type, occurredOn);
+                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
+        validate(category, amount, type, paymentMethod, occurredOn);
         // Defesa extra: o service só deveria passar categorias do próprio usuário.
         // Se isto disparar, é BUG nosso (500), não erro do cliente (400).
         if (category != null && !category.getUserId().equals(userId)) {
@@ -81,11 +87,13 @@ public class Transaction {
         this.category = category;
         this.amount = amount;
         this.type = type;
+        this.paymentMethod = paymentMethod;
         this.description = description;
         this.occurredOn = occurredOn;
     }
 
-    private static void validate(Category category, BigDecimal amount, TransactionType type, LocalDate occurredOn) {
+    private static void validate(Category category, BigDecimal amount, TransactionType type,
+                                 PaymentMethod paymentMethod, LocalDate occurredOn) {
         if (amount == null || amount.signum() <= 0) {
             throw new BusinessRuleException("O valor deve ser maior que zero");
         }
@@ -95,6 +103,12 @@ public class Transaction {
         }
         if (type == null) {
             throw new BusinessRuleException("O tipo é obrigatório");
+        }
+        if (type == TransactionType.EXPENSE && paymentMethod == null) {
+            throw new BusinessRuleException("A forma de pagamento é obrigatória para despesas");
+        }
+        if (type == TransactionType.INCOME && paymentMethod != null) {
+            throw new BusinessRuleException("Receitas não têm forma de pagamento");
         }
         if (occurredOn == null) {
             throw new BusinessRuleException("A data é obrigatória");
@@ -123,6 +137,10 @@ public class Transaction {
 
     public TransactionType getType() {
         return type;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
     }
 
     public String getDescription() {
