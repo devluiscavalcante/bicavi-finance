@@ -12,3 +12,26 @@ main {
   margin: 0 auto;
   padding: 16px;
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 8px;
+}
+
+.error {
+  color: #c62828;
+  margin: 0;
+}
