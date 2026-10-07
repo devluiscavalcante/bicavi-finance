@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="18" fill="#18181b"/>
+  <!-- Fonte dos ícones do PWA (ver pwa-assets.config.ts). Quadrado SEM cantos
+       arredondados: iOS e Android aplicam a própria máscara de forma.
+       O "B" é um path, não texto, para não depender de fonte instalada. -->
+  <rect width="64" height="64" fill="#18181b"/>
   <path fill="#fafafa" fill-rule="evenodd" transform="translate(-1 0)"
         d="M20 15H35C41 15 44.5 18.3 44.5 23.2C44.5 26.6 42.7 29 39.8 30C43.5 31 46 34 46 38.3C46 44.6 41.6 49 34.8 49H20Z
            M27.5 21V28H33.6C35.9 28 37.2 26.7 37.2 24.5C37.2 22.3 35.9 21 33.6 21Z

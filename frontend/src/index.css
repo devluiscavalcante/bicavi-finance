@@ -90,7 +90,9 @@ main {
   z-index: 1;
   max-width: 480px;
   margin: 0 auto;
-  padding: 16px 16px 32px;
+  /* env(safe-area-inset-*): espaço do entalhe e da barra de gestos do iPhone (0 nos demais). */
+  padding: calc(16px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    calc(32px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 h1,
@@ -225,7 +227,7 @@ label {
 
 input {
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem; /* 16px: abaixo disso o Safari do iOS dá zoom ao tocar no campo */
   color: var(--text);
   background: var(--surface-solid);
   border: 1px solid var(--border);
@@ -255,6 +257,7 @@ input:focus {
 
 /* ---------- Botões ---------- */
 button {
+  -webkit-tap-highlight-color: transparent; /* sem o "flash" cinza ao tocar no iOS */
   font: inherit;
   cursor: pointer;
   border: none;
@@ -291,6 +294,7 @@ button {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(8px); /* Safari antigo */
   backdrop-filter: blur(8px);
   transition: background 0.2s, transform 0.15s var(--ease);
 }
@@ -343,6 +347,7 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(12px); /* Safari antigo */
   backdrop-filter: blur(12px);
   padding: 28px 24px;
   display: flex;
@@ -496,6 +501,7 @@ button {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  -webkit-backdrop-filter: blur(12px); /* Safari antigo */
   backdrop-filter: blur(12px);
   padding: 20px;
   margin-top: 16px;
@@ -666,7 +672,7 @@ button {
 .fab {
   position: fixed;
   right: max(20px, calc(50% - 240px + 20px)); /* alinha com a coluna de 480px */
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: 2;
   display: grid;
   place-items: center;
@@ -703,7 +709,7 @@ button {
 
 /* Espaço no fim da página para o "+" não cobrir a última transação. */
 main:has(.fab) {
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 /* Painel: <dialog> preso na parte de baixo da tela. */
@@ -726,6 +732,7 @@ main:has(.fab) {
 
 .sheet::backdrop {
   background: rgb(0 0 0 / 0.4);
+  -webkit-backdrop-filter: blur(2px); /* Safari antigo */
   backdrop-filter: blur(2px);
   animation: fade-in 0.3s ease;
 }
@@ -737,7 +744,7 @@ main:has(.fab) {
 }
 
 .sheet-body {
-  padding: 8px 20px 28px;
+  padding: 8px 20px calc(28px + env(safe-area-inset-bottom));
 }
 
 .sheet-handle {
@@ -858,7 +865,7 @@ main:has(.fab) {
 
 select {
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem; /* 16px: evita o zoom automático do iOS */
   color: var(--text);
   background: var(--surface-solid);
   border: 1px solid var(--border);
@@ -977,6 +984,7 @@ a.icon-btn {
   background: transparent;
   border-color: transparent;
   color: var(--muted);
+  -webkit-backdrop-filter: none; /* Safari antigo */
   backdrop-filter: none;
 }
 
@@ -1012,6 +1020,7 @@ a.icon-btn {
 
 .confirm::backdrop {
   background: rgb(0 0 0 / 0.4);
+  -webkit-backdrop-filter: blur(2px); /* Safari antigo */
   backdrop-filter: blur(2px);
   animation: fade-in 0.3s ease;
 }
