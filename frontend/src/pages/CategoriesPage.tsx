@@ -14,10 +14,17 @@ function errorMessage(e: unknown) {
   return e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor'
 }
 
+const LABELS: Record<TransactionType, { tab: string; singular: string; example: string }> = {
+  EXPENSE: { tab: 'Despesas', singular: 'despesa', example: 'Ex.: Mercado' },
+  INCOME: { tab: 'Receitas', singular: 'receita', example: 'Ex.: Salário' },
+}
+
 export function CategoriesPage() {
   const [categories, setCategories] = useState<CategoryResponse[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<CategoryResponse | null>(null)
+  // A aba escolhida filtra a lista E define o tipo da categoria criada.
+  const [type, setType] = useState<TransactionType>('EXPENSE')
 
   useEffect(() => {
     api<CategoryResponse[]>('/api/categories')
@@ -42,6 +49,8 @@ export function CategoriesPage() {
     setToDelete(null)
   }
 
+  const items = (categories ?? []).filter(c => c.type === type)
+
   return (
     <main>
       <header className="page-header">
@@ -51,17 +60,33 @@ export function CategoriesPage() {
         <h1>Categorias</h1>
       </header>
 
-      <CreateCategoryForm onCreated={handleCreated} />
+      <div className="segmented reveal" role="tablist" aria-label="Tipo de categoria">
+        {(['EXPENSE', 'INCOME'] as const).map(t => (
+          <button key={t} type="button" role="tab" aria-selected={type === t}
+                  className={type === t ? 'active' : ''} onClick={() => setType(t)}>
+            {LABELS[t].tab}
+          </button>
+        ))}
+      </div>
+
+      {/* key={type}: trocar de aba recria o formulário, limpando nome e erro digitados. */}
+      <CreateCategoryForm key={type} type={type} onCreated={handleCreated} />
 
       {loadError && <p className="error">{loadError}</p>}
       {!categories && !loadError && <div className="skeleton" style={{ height: 200, marginTop: 16 }} />}
       {categories && (
-        <>
-          <CategoryGroup title="Despesas" type="EXPENSE" categories={categories} delay={80}
-                         onRenamed={handleRenamed} onDelete={setToDelete} />
-          <CategoryGroup title="Receitas" type="INCOME" categories={categories} delay={160}
-                         onRenamed={handleRenamed} onDelete={setToDelete} />
-        </>
+        <section className="card reveal" style={{ animationDelay: '80ms' }}>
+          <h2>{LABELS[type].tab}</h2>
+          {items.length === 0 ? (
+            <p className="muted">Nenhuma categoria de {LABELS[type].singular} ainda.</p>
+          ) : (
+            <ul className="category-list">
+              {items.map(c => (
+                <CategoryRow key={c.id} category={c} onRenamed={handleRenamed} onDelete={setToDelete} />
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {toDelete && (
@@ -77,9 +102,11 @@ export function CategoriesPage() {
   )
 }
 
-function CreateCategoryForm({ onCreated }: { onCreated: (c: CategoryResponse) => void }) {
+function CreateCategoryForm({ type, onCreated }: {
+  type: TransactionType
+  onCreated: (c: CategoryResponse) => void
+}) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<TransactionType>('EXPENSE')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -94,7 +121,7 @@ function CreateCategoryForm({ onCreated }: { onCreated: (c: CategoryResponse) =>
         body: JSON.stringify({ name: name.trim(), type }),
       })
       onCreated(created)
-      setName('') // mantém o tipo: facilita criar várias do mesmo tipo seguidas
+      setName('')
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -103,52 +130,18 @@ function CreateCategoryForm({ onCreated }: { onCreated: (c: CategoryResponse) =>
   }
 
   return (
-    <section className="card reveal">
-      <h2>Nova categoria</h2>
+    <section className="card reveal" style={{ animationDelay: '40ms' }}>
+      <h2>Nova categoria de {LABELS[type].singular}</h2>
       <form onSubmit={handleSubmit}>
-        <div className="segmented" role="radiogroup" aria-label="Tipo">
-          {(['EXPENSE', 'INCOME'] as const).map(t => (
-            <button key={t} type="button" role="radio" aria-checked={type === t}
-                    className={type === t ? 'active' : ''} onClick={() => setType(t)}>
-              {t === 'EXPENSE' ? 'Despesa' : 'Receita'}
-            </button>
-          ))}
-        </div>
         <div className="inline-form">
           <input value={name} onChange={e => setName(e.target.value)} maxLength={50}
-                 placeholder={type === 'EXPENSE' ? 'Ex.: Mercado' : 'Ex.: Salário'}
-                 aria-label="Nome da categoria" />
+                 placeholder={LABELS[type].example} aria-label="Nome da categoria" />
           <button type="submit" className="btn-primary" disabled={saving || name.trim() === ''}>
             {saving ? '...' : 'Adicionar'}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
       </form>
-    </section>
-  )
-}
-
-function CategoryGroup({ title, type, categories, delay, onRenamed, onDelete }: {
-  title: string
-  type: TransactionType
-  categories: CategoryResponse[]
-  delay: number
-  onRenamed: (c: CategoryResponse) => void
-  onDelete: (c: CategoryResponse) => void
-}) {
-  const items = categories.filter(c => c.type === type)
-  return (
-    <section className="card reveal" style={{ animationDelay: `${delay}ms` }}>
-      <h2>{title}</h2>
-      {items.length === 0 ? (
-        <p className="muted">Nenhuma categoria de {title.toLowerCase()} ainda.</p>
-      ) : (
-        <ul className="category-list">
-          {items.map(c => (
-            <CategoryRow key={c.id} category={c} onRenamed={onRenamed} onDelete={onDelete} />
-          ))}
-        </ul>
-      )}
     </section>
   )
 }

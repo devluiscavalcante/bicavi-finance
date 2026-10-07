@@ -50,6 +50,14 @@ public class TransactionController {
         return service.create(CurrentUser.id(jwt), request);
     }
 
+    // POST /api/transactions/installments: cria as N parcelas de uma compra de uma vez.
+    @PostMapping("/installments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<TransactionResponse> createInstallments(@AuthenticationPrincipal Jwt jwt,
+                                                        @Valid @RequestBody InstallmentRequest request) {
+        return service.createInstallments(CurrentUser.id(jwt), request);
+    }
+
     @PutMapping("/{id}")
     public TransactionResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                                       @Valid @RequestBody TransactionRequest request) {

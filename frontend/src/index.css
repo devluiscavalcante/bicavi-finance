@@ -1151,3 +1151,10 @@ a.icon-btn {
   opacity: 0.6;
   cursor: wait;
 }
+
+/* Texto de ajuda abaixo de um campo (prévia das parcelas, dica do crédito). */
+.hint {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}

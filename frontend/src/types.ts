@@ -57,6 +57,16 @@ export interface CategoryResponse {
   type: TransactionType
 }
 
+// Corpo do POST /api/transactions/installments (compra parcelada, sempre despesa).
+export interface InstallmentRequest {
+  totalAmount: number // total da compra; o backend divide
+  installments: number // 2 a 24
+  paymentMethod: PaymentMethod | null
+  categoryId: number | null
+  description: string | null
+  firstDate: string // data da 1ª parcela; as demais nos meses seguintes
+}
+
 // Corpo do POST /api/transactions.
 export interface TransactionRequest {
   amount: number

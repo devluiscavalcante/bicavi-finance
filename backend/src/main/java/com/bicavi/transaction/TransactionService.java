@@ -8,13 +8,17 @@ import com.bicavi.period.PeriodPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 
 // Todo método recebe o userId do usuário logado (vindo do token, nunca do cliente).
 // Regras de período (meses fechados e janela de consulta): ver PeriodPolicy.
 @Service
 public class TransactionService {
+
+    private static final BigDecimal MIN_INSTALLMENT = new BigDecimal("0.01");
 
     private final TransactionRepository transactions;
     private final CategoryRepository categories;
@@ -53,6 +57,40 @@ public class TransactionService {
                 normalize(request.description()),
                 request.occurredOn());
         return TransactionResponse.from(transactions.save(tx));
+    }
+
+    // Cria todas as parcelas numa ÚNICA transação de banco (@Transactional):
+    // se qualquer uma falhar, nenhuma é gravada. Não sobra compra pela metade.
+    @Transactional
+    public List<TransactionResponse> createInstallments(Long userId, InstallmentRequest request) {
+        int count = request.installments();
+        // Só a 1ª precisa ser checada: as demais caem em meses posteriores, que nunca estão fechados.
+        period.checkEditable(request.firstDate());
+        if (request.totalAmount().compareTo(MIN_INSTALLMENT.multiply(BigDecimal.valueOf(count))) < 0) {
+            throw new BusinessRuleException("O total é pequeno demais para " + count + " parcelas (mínimo R$ 0,01 cada)");
+        }
+
+        Category category = findCategory(userId, request.categoryId());
+        String description = normalize(request.description());
+        List<BigDecimal> amounts = Installments.split(request.totalAmount(), count);
+
+        List<Transaction> parts = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            String label = "(" + (i + 1) + "/" + count + ")";
+            parts.add(new Transaction(
+                    userId,
+                    category,
+                    amounts.get(i),
+                    TransactionType.EXPENSE,
+                    request.paymentMethod(),
+                    description == null ? "Parcela " + label : description + " " + label,
+                    // Sempre a partir da 1ª data (e não "mês anterior + 1"): 31/01 vira
+                    // 28/02 e depois volta a 31/03, sem ficar preso no dia 28.
+                    request.firstDate().plusMonths(i)));
+        }
+        return transactions.saveAll(parts).stream()
+                .map(TransactionResponse::from)
+                .toList();
     }
 
     @Transactional

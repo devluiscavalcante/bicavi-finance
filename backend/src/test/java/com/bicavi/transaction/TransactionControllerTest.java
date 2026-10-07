@@ -99,6 +99,43 @@ class TransactionControllerTest {
     }
 
     @Test
+    void createInstallmentsReturns201WithAllParts() throws Exception {
+        when(service.createInstallments(eq(USER), any())).thenReturn(List.of(
+                new TransactionResponse(1L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
+                        null, null, "TV (1/2)", LocalDate.of(2026, 11, 10)),
+                new TransactionResponse(2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
+                        null, null, "TV (2/2)", LocalDate.of(2026, 12, 10))));
+
+        mockMvc.perform(post("/api/transactions/installments").with(loggedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"totalAmount": 100, "installments": 2, "paymentMethod": "CREDITO",
+                                 "description": "TV", "firstDate": "2026-11-10"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[1].description").value("TV (2/2)"));
+
+        verify(service).createInstallments(USER, new InstallmentRequest(
+                new BigDecimal("100"), 2, PaymentMethod.CREDITO, null, "TV", LocalDate.of(2026, 11, 10)));
+    }
+
+    @Test
+    void createInstallmentsOutsideTwoToTwentyFourReturns400() throws Exception {
+        for (int installments : new int[] {1, 25}) {
+            mockMvc.perform(post("/api/transactions/installments").with(loggedUser())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"totalAmount": 100, "installments": %d, "paymentMethod": "CREDITO",
+                                     "firstDate": "2026-11-10"}
+                                    """.formatted(installments)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.installments").exists());
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void createWithUnknownPaymentMethodReturns400() throws Exception {
         mockMvc.perform(post("/api/transactions").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)

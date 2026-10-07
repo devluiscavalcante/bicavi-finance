@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from './api'
 import { ConfirmDialog } from './ConfirmDialog'
-import { formatPaymentMethod, parseAmount, PAYMENT_METHODS } from './format'
+import { formatPaymentMethod, installmentPreview, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
 import type {
-  CategoryResponse, PaymentMethod, PeriodResponse, TransactionRequest, TransactionResponse, TransactionType,
+  CategoryResponse, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest, TransactionResponse,
+  TransactionType,
 } from './types'
+
+// 1x (à vista) até 24x, o mesmo limite do backend (@Min(2) @Max(24) no parcelado).
+const INSTALLMENT_OPTIONS = Array.from({ length: 24 }, (_, i) => i + 1)
 
 // Painel que sobe por baixo com o formulário de transação: cria uma nova ou,
 // se receber `transaction`, edita/exclui a existente.
@@ -31,12 +35,18 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const [categoryId, setCategoryId] = useState(transaction?.categoryId?.toString() ?? '') // '' = sem categoria
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [occurredOn, setOccurredOn] = useState(transaction?.occurredOn ?? defaultDate)
+  // 1 = à vista. Só existe na criação de despesa; cada parcela salva vira uma transação comum.
+  const [installments, setInstallments] = useState(1)
   const [categories, setCategories] = useState<CategoryResponse[]>([])
 
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  const canSplit = !editing && type === 'EXPENSE'
+  const split = canSplit && installments > 1
+  const previewAmount = parseAmount(amountText)
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -53,12 +63,14 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
     })
   }, [])
 
-  // Receita não tem forma de pagamento e as categorias são de outro tipo:
-  // ao trocar o tipo, limpamos os dois para não enviar algo que o backend recusaria.
+  // Receita não tem forma de pagamento, nem parcelas, e as categorias são de
+  // outro tipo: ao trocar o tipo, limpamos tudo isso para não enviar algo que o
+  // backend recusaria.
   function changeType(next: TransactionType) {
     setType(next)
     setPaymentMethod(null)
     setCategoryId('')
+    setInstallments(1)
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -83,27 +95,54 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
       return
     }
 
-    const request: TransactionRequest = {
-      amount: amount!,
-      type,
-      paymentMethod: type === 'EXPENSE' ? paymentMethod : null,
-      categoryId: categoryId === '' ? null : Number(categoryId),
-      description: description.trim() === '' ? null : description.trim(),
-      occurredOn,
-    }
+    const categoryValue = categoryId === '' ? null : Number(categoryId)
+    const descriptionValue = description.trim() === '' ? null : description.trim()
 
     setSaving(true)
     try {
-      // PUT substitui todos os campos (mesmo TransactionRequest do POST).
-      const saved = await api<TransactionResponse>(
-        editing ? `/api/transactions/${transaction.id}` : '/api/transactions',
-        { method: editing ? 'PUT' : 'POST', body: JSON.stringify(request) },
-      )
+      let saved: TransactionResponse
+      if (split) {
+        const request: InstallmentRequest = {
+          totalAmount: amount!,
+          installments,
+          paymentMethod,
+          categoryId: categoryValue,
+          description: descriptionValue,
+          firstDate: occurredOn,
+        }
+        const parts = await api<TransactionResponse[]>('/api/transactions/installments', {
+          method: 'POST',
+          body: JSON.stringify(request),
+        })
+        // A tela do mês vai para o mês da 1ª parcela e a destaca.
+        saved = parts[0]
+      } else {
+        const request: TransactionRequest = {
+          amount: amount!,
+          type,
+          paymentMethod: type === 'EXPENSE' ? paymentMethod : null,
+          categoryId: categoryValue,
+          description: descriptionValue,
+          occurredOn,
+        }
+        // PUT substitui todos os campos (mesmo TransactionRequest do POST).
+        saved = await api<TransactionResponse>(
+          editing ? `/api/transactions/${transaction.id}` : '/api/transactions',
+          { method: editing ? 'PUT' : 'POST', body: JSON.stringify(request) },
+        )
+      }
       onSaved(saved)
     } catch (e) {
       if (e instanceof ApiError) {
         setError(e.message)
-        setFieldErrors(e.fieldErrors)
+        // O parcelado chama o valor de "totalAmount" e a data de "firstDate":
+        // mostramos os erros nos mesmos campos da tela.
+        const { totalAmount, firstDate, ...others } = e.fieldErrors
+        setFieldErrors({
+          ...others,
+          ...(totalAmount && { amount: totalAmount }),
+          ...(firstDate && { occurredOn: firstDate }),
+        })
       } else {
         setError('Não foi possível conectar ao servidor')
       }
@@ -157,7 +196,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
           </div>
 
           <label className="amount-field">
-            Valor
+            {split ? 'Valor total da compra' : 'Valor'}
             <div className="amount-input">
               <span>R$</span>
               {/* inputMode="decimal": no celular abre o teclado numérico com vírgula. */}
@@ -183,6 +222,21 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
             </div>
           )}
 
+          {canSplit && (
+            <label>
+              Parcelas
+              <select value={installments} onChange={e => setInstallments(Number(e.target.value))}>
+                {INSTALLMENT_OPTIONS.map(n => (
+                  <option key={n} value={n}>{n === 1 ? 'À vista' : `${n}x`}</option>
+                ))}
+              </select>
+              {split && previewAmount !== null && (
+                <span className="hint">{installmentPreview(previewAmount, installments)}</span>
+              )}
+            </label>
+          )}
+          {fieldErrors.installments && <p className="field-error">{fieldErrors.installments}</p>}
+
           <label>
             Categoria
             <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
@@ -196,21 +250,29 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
           <label>
             Descrição
             <input value={description} onChange={e => setDescription(e.target.value)}
-                   placeholder={type === 'EXPENSE' ? 'Ex.: Mercado' : 'Ex.: Salário'} maxLength={255} />
+                   placeholder={type === 'EXPENSE' ? 'Ex.: Mercado' : 'Ex.: Salário'}
+                   maxLength={split ? 247 : 255} />
+            {split && <span className="hint">Cada parcela recebe “(1/{installments})”, “(2/{installments})”…</span>}
           </label>
           {fieldErrors.description && <p className="field-error">{fieldErrors.description}</p>}
 
           <label>
-            Data
+            {split ? 'Data da 1ª parcela' : 'Data'}
             {/* min: o seletor de data não oferece meses fechados. O backend recusa de qualquer jeito. */}
             <input type="date" value={occurredOn} min={`${period.firstEditableMonth}-01`}
                    onChange={e => setOccurredOn(e.target.value)} required />
+            {/* Combinado com o casal: no crédito, a compra entra no mês em que a fatura é PAGA. */}
+            {paymentMethod === 'CREDITO' && type === 'EXPENSE' && (
+              <span className="hint">
+                No crédito, use a data de vencimento da fatura em que {split ? 'a 1ª parcela' : 'a compra'} cai.
+              </span>
+            )}
           </label>
           {fieldErrors.occurredOn && <p className="field-error">{fieldErrors.occurredOn}</p>}
 
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Salvar'}
+            {saving ? 'Salvando...' : editing ? 'Salvar alterações' : split ? `Lançar ${installments} parcelas` : 'Salvar'}
           </button>
           {editing && (
             <button type="button" className="btn-text-danger" disabled={saving}

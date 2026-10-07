@@ -80,3 +80,17 @@ export function parseAmount(text: string): number | null {
   const value = Number(normalized)
   return value > 0 ? value : null
 }
+
+// Prévia do parcelamento, ex.: "3x de R$ 33,33 (1ª de R$ 33,34)".
+// Só EXIBE: quem divide de verdade é o backend (BigDecimal). A conta aqui é em
+// CENTAVOS INTEIROS, que o JavaScript representa sem erro, e segue a mesma regra
+// do backend: o que sobrar da divisão vai para a 1ª parcela.
+export function installmentPreview(total: number, count: number): string {
+  const cents = Math.round(total * 100)
+  const base = Math.floor(cents / count)
+  const first = cents - base * (count - 1)
+  const baseText = formatMoney(base / 100)
+  return first === base
+    ? `${count}x de ${baseText}`
+    : `${count}x de ${baseText} (1ª de ${formatMoney(first / 100)})`
+}
