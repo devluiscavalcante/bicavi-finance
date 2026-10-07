@@ -1,0 +1,7 @@
+# O que NÃO vai para o contexto do build da imagem.
+# .env: segredos nunca entram na imagem; chegam como variáveis de ambiente.
+.env
+target/
+.idea/
+*.iml
+compose.yaml

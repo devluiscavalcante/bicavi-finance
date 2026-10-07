@@ -1,0 +1,54 @@
+# Bicavi em produção: banco + backend + nginx (frontend).
+#   docker compose up -d --build     sobe/atualiza tudo
+#   docker compose logs -f backend   acompanha os logs
+#   docker compose down              para (os dados ficam no volume db-data)
+#
+# As variáveis vêm do arquivo .env NESTA pasta (não versionado; ver .env.example).
+# O compose de desenvolvimento (só o Postgres) continua em backend/compose.yaml,
+# com outro volume: dados reais e dados de teste nunca se misturam.
+name: bicavi
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Sem "ports": o banco só é acessível pela rede interna do compose.
+    healthcheck:
+      # $$ = "$" literal: a variável é lida DENTRO do container, não pelo compose.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    # Só sobe quando o Postgres estiver aceitando conexões (senão o Flyway falha).
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    # 127.0.0.1: acessível só NESTE computador (nem a rede local alcança).
+    # Quem expõe para os iPhones, com HTTPS, é o Tailscale (ver DEPLOY.md).
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8088}:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

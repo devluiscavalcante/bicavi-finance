@@ -1,0 +1,5 @@
+# node_modules é reinstalado dentro da imagem (npm ci). Copiar o do Windows
+# traria binários nativos da plataforma errada (sharp, rolldown...).
+node_modules/
+dist/
+.env
