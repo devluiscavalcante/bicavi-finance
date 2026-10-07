@@ -1,4 +1,7 @@
-// Espelham os records do backend (pacote com.bicavi.auth).
+// Espelham os records do backend.
+//
+// Dinheiro chega como number (BigDecimal serializado pelo Jackson). O frontend
+// só EXIBE esses valores: nenhuma conta aqui, os totais vêm prontos da API.
 
 export interface UserResponse {
   id: number
@@ -10,4 +13,33 @@ export interface LoginResponse {
   accessToken: string
   tokenType: string
   expiresIn: number
+}
+
+export type TransactionType = 'INCOME' | 'EXPENSE'
+
+export type PaymentMethod = 'PIX' | 'DINHEIRO' | 'DEBITO' | 'CREDITO' | 'BOLETO'
+
+export interface TransactionResponse {
+  id: number
+  amount: number
+  type: TransactionType
+  paymentMethod: PaymentMethod | null // null em receitas
+  categoryId: number | null
+  categoryName: string | null
+  description: string | null
+  occurredOn: string // "2026-10-07"
+}
+
+export interface CategoryTotal {
+  categoryId: number | null // null = "Sem categoria"
+  categoryName: string | null
+  total: number
+}
+
+export interface MonthlySummaryResponse {
+  month: string // "2026-10"
+  totalIncome: number
+  totalExpense: number
+  balance: number
+  expensesByCategory: CategoryTotal[]
 }

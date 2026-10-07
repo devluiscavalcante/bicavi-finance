@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../api'
 import { login } from '../auth'
+import { AuthLayout } from '../AuthLayout'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -26,8 +27,11 @@ export function LoginPage() {
   }
 
   return (
-    <main>
-      <h1>Entrar</h1>
+    <AuthLayout
+      title="Bem-vindo de volta"
+      subtitle="Entre para ver suas finanças do mês."
+      footer={<>Não tem conta? <Link to="/cadastro">Cadastre-se</Link></>}
+    >
       <form onSubmit={handleSubmit}>
         <label>
           E-mail
@@ -40,9 +44,10 @@ export function LoginPage() {
                  autoComplete="current-password" required />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? 'Entrando...' : 'Entrar'}
+        </button>
       </form>
-      <p>Não tem conta? <Link to="/cadastro">Cadastre-se</Link></p>
-    </main>
+    </AuthLayout>
   )
 }

@@ -1,37 +1,661 @@
+/* ---------- Design tokens ----------
+   Todas as cores, raios e sombras ficam aqui. Os componentes só usam var(--...),
+   então trocar o tema (claro/escuro) é só redefinir as variáveis.
+   Paleta minimalista: cinzas neutros; cor só onde carrega significado
+   (verde = entrou dinheiro, vermelho = saiu). */
 :root {
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
+  --bg: #fafafa;
+  --surface: rgb(255 255 255 / 0.8);
+  --surface-solid: #ffffff;
+  --surface-2: #f4f4f5;
+  --text: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+
+  --primary: #18181b;
+  --primary-hover: #3f3f46;
+  --on-primary: #fafafa;
+
+  --hero-bg: #18181b;
+  --hero-text: #fafafa;
+  --hero-muted: rgb(250 250 250 / 0.6);
+  --hero-chip: rgb(255 255 255 / 0.08);
+
+  --income: #16a34a;
+  --income-soft: #f0fdf4;
+  --expense: #dc2626;
+  --expense-soft: #fef2f2;
+
+  --dot: rgb(24 24 27 / 0.09);
+  --glow-1: rgb(161 161 170 / 0.35);
+  --glow-2: rgb(212 212 216 / 0.5);
+
+  --radius-sm: 12px;
+  --radius: 18px;
+  --radius-lg: 24px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #09090b;
+    --surface: rgb(24 24 27 / 0.75);
+    --surface-solid: #18181b;
+    --surface-2: #27272a;
+    --text: #fafafa;
+    --muted: #a1a1aa;
+    --border: #27272a;
+
+    --primary: #fafafa;
+    --primary-hover: #d4d4d8;
+    --on-primary: #09090b;
+
+    --hero-bg: #fafafa;
+    --hero-text: #09090b;
+    --hero-muted: rgb(9 9 11 / 0.55);
+    --hero-chip: rgb(0 0 0 / 0.06);
+
+    --income: #4ade80;
+    --income-soft: rgb(74 222 128 / 0.1);
+    --expense: #f87171;
+    --expense-soft: rgb(248 113 113 / 0.1);
+
+    --dot: rgb(250 250 250 / 0.07);
+    --glow-1: rgb(113 113 122 / 0.25);
+    --glow-2: rgb(82 82 91 / 0.3);
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* ---------- Base ---------- */
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+  min-height: 100dvh;
 }
 
 main {
+  position: relative; /* fica acima do fundo animado */
+  z-index: 1;
   max-width: 480px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 32px;
 }
 
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+  transition: text-decoration-color 0.2s;
+}
+
+a:hover {
+  text-decoration-color: var(--text);
+}
+
+small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.income {
+  color: var(--income);
+}
+
+.expense {
+  color: var(--expense);
+}
+
+/* ---------- Fundo animado ----------
+   Grade de pontos (some nas bordas) + duas manchas de luz desfocadas
+   que flutuam devagar. Fica fixo atrás de tudo e não recebe cliques. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%);
+}
+
+.glow {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
+.glow-1 {
+  background: var(--glow-1);
+  top: -140px;
+  left: -120px;
+}
+
+.glow-2 {
+  background: var(--glow-2);
+  bottom: -160px;
+  right: -140px;
+  animation-duration: 28s;
+  animation-delay: -10s;
+}
+
+@keyframes drift {
+  50% {
+    transform: translate(90px, 60px) scale(1.15);
+  }
+  100% {
+    transform: translate(-40px, 120px) scale(0.95);
+  }
+}
+
+/* Partículas das telas de login/cadastro (ver ParticleField.tsx).
+   Acima do .backdrop, abaixo do conteúdo (main tem z-index 1). */
+.particles {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  animation: fade-in 1.2s ease both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Entrada dos elementos ---------- */
+.reveal {
+  animation: reveal 0.6s var(--ease) both;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* ---------- Formulários ---------- */
 form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
-input,
-button {
+input {
   font: inherit;
-  padding: 8px;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 4px var(--surface-2);
+}
+
+.field-error,
+.error {
+  color: var(--expense);
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .error {
-  color: #c62828;
+  background: var(--expense-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+/* ---------- Botões ---------- */
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 13px;
+  transition: background 0.2s, transform 0.15s var(--ease);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  transition: background 0.2s, transform 0.15s var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Telas de login/cadastro ---------- */
+.auth {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.auth-card .subtitle {
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.auth-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- Tela do mês ---------- */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.greeting {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.greeting strong {
+  font-weight: 600;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.month-nav h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* "outubro de 2026" -> "Outubro de 2026": só a 1ª letra. */
+.month-nav h1::first-letter {
+  text-transform: uppercase;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--hero-bg);
+  color: var(--hero-text);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Reflexo de luz que atravessa o cartão a cada poucos segundos. */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.08) 50%, transparent 60%);
+  transform: translateX(-100%);
+  animation: sheen 6s var(--ease) 1s infinite;
+  pointer-events: none;
+}
+
+@keyframes sheen {
+  40%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.hero small {
+  color: var(--hero-muted);
+}
+
+.hero-balance {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hero-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--hero-chip);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.hero-stat svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.hero-stat div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hero-stat strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.card h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+/* Gastos por categoria */
+.categories {
+  list-style: none;
+  padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.category-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.category-head strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--text);
+  transform-origin: left;
+  animation: grow 0.9s var(--ease) 0.2s both;
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Lista de transações */
+.transactions {
+  list-style: none;
+  padding: 0;
+  margin: 0 -8px;
+}
+
+.transactions li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.transactions li:hover {
+  background: var(--surface-2);
+}
+
+.tx-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tx-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tx-icon.income {
+  background: var(--income-soft);
+}
+
+.tx-icon.expense {
+  background: var(--expense-soft);
+}
+
+.tx-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tx-main strong {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tx-amount {
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Estados vazios e de carregamento */
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 8px;
+}
+
+.empty svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Quem pediu menos movimento no sistema não vê nenhuma animação. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
