@@ -102,6 +102,31 @@ class DataIsolationIntegrationTest {
     }
 
     @Test
+    void bobCannotSeeReadRenameOrDeleteAlicesCard() throws Exception {
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
+                {"name": "Nubank"}
+                """);
+        String path = "/api/cards/" + aliceCardId;
+
+        mockMvc.perform(get("/api/cards").header("Authorization", bearer(bobToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get(path).header("Authorization", bearer(bobToken)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(put(path).header("Authorization", bearer(bobToken))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"name": "Hackeado"}
+                                """))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete(path).header("Authorization", bearer(bobToken)))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get(path).header("Authorization", bearer(aliceToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Nubank"));
+    }
+
+    @Test
     void bobCannotUseAlicesCategoryInHisTransaction() throws Exception {
         mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
