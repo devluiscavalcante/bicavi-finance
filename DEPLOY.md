@@ -126,8 +126,16 @@ cd C:\bicavi
 git log -1 --oneline   # anote o commit atual: é para ele que você volta se der problema
 powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -Destino "$env:USERPROFILE\OneDrive\Bicavi-backups"
 git pull
-docker compose up -d --build
+docker compose pull db         # baixa a versão mais nova do Postgres 17 (correções de segurança)
+docker compose build --pull    # recompila o app sobre as imagens base mais novas (Java, Node, nginx)
+docker compose up -d
 ```
+
+Por que `pull` e `--pull`: o Docker reaproveita as imagens que já estão no PC.
+Sem eles, as correções de segurança do Postgres, do Java e do nginx nunca
+chegariam aqui. A tag `postgres:17` só recebe versões 17.x, que são
+compatíveis com os dados já gravados; a troca para outra versão principal
+(18, por exemplo) exige migrar os dados e nunca acontece sozinha.
 
 **Sempre faça o backup antes do `git pull`.** Versões novas podem trazer
 *migrations* (arquivos `V*.sql` em `backend/src/main/resources/db/migration`)
@@ -152,12 +160,11 @@ Os iPhones recebem a versão nova sozinhos na próxima vez que o app abrir.
    Restaure o backup feito antes do `pull` (seção 9) e suba de novo.
    Dados lançados **depois** desse backup se perdem: lance-os de novo.
 
-3. Quando a correção chegar na `master`, volte para ela e atualize normalmente:
+3. Quando a correção chegar na `master`, volte para ela e atualize com os
+   mesmos comandos do início desta seção (backup antes):
 
    ```powershell
    git switch master
-   git pull
-   docker compose up -d --build
    ```
 
 ## 9. Restaurar um backup
