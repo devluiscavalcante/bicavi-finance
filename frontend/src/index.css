@@ -1231,3 +1231,26 @@ main {
     transform: translateX(-32px);
   }
 }
+
+/* ---------- "Ver mais" / "Ver todas" no fim dos cards ---------- */
+
+.more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: color 0.2s, transform 0.15s var(--ease);
+}
+
+.more-btn:hover {
+  color: var(--text);
+}
+
+.more-btn:active {
+  transform: scale(0.98);
+}

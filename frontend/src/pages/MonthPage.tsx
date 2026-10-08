@@ -223,6 +223,11 @@ function MonthSkeleton() {
   )
 }
 
+// Quantas transações aparecem de início (e a mais a cada "Ver mais"),
+// e quantas categorias aparecem antes do "Ver todas".
+const TX_PAGE = 5
+const CATEGORY_PAGE = 3
+
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'ALL', label: 'Todas' },
   { value: 'EXPENSE', label: 'Despesas' },
@@ -252,8 +257,46 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
   onFilterChange: (f: Filter) => void
   onSelect: (tx: TransactionResponse) => void
 }) {
-  const visible = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
-  const groups = groupByDay(visible)
+  // Quantas transações e categorias aparecem. Não precisa zerar ao trocar de mês:
+  // o pai recria este componente a cada mês (key={month}).
+  const [txLimit, setTxLimit] = useState(TX_PAGE)
+  const [showAllCategories, setShowAllCategories] = useState(false)
+  // Último destaque já revelado (ver abaixo).
+  const [revealedId, setRevealedId] = useState<number | null>(null)
+  const transactionsCard = useRef<HTMLElement>(null)
+
+  const filtered = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
+
+  // Transação recém-salva com data antiga pode cair depois do limite: a lista
+  // abre até ela, uma vez. Ajustar o estado durante a renderização (e não num
+  // useEffect) evita desenhar a tela com ela escondida e logo depois redesenhar.
+  // Só age quando ela já está na lista: a resposta da API chega depois do destaque.
+  const highlightIndex = filtered.findIndex(tx => tx.id === highlightId)
+  if (highlightId !== revealedId && highlightIndex !== -1) {
+    setRevealedId(highlightId)
+    if (highlightIndex >= txLimit) {
+      setTxLimit(Math.ceil((highlightIndex + 1) / TX_PAGE) * TX_PAGE)
+    }
+  }
+
+  // Corta ANTES de agrupar por dia: os títulos de dia continuam corretos.
+  const groups = groupByDay(filtered.slice(0, txLimit))
+  const hiddenCount = Math.max(filtered.length - txLimit, 0)
+
+  const categories = summary.expensesByCategory
+  const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_PAGE)
+
+  function changeFilter(f: Filter) {
+    setTxLimit(TX_PAGE)
+    onFilterChange(f)
+  }
+
+  function showLessTransactions() {
+    setTxLimit(TX_PAGE)
+    // A lista encolhe: sem isso, quem estava no fim ficaria olhando para o vazio.
+    transactionsCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   let rowIndex = 0 // para a entrada em cascata atravessar os grupos
 
   return (
@@ -281,11 +324,12 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
         </div>
       </section>
 
-      {summary.expensesByCategory.length > 0 && (
+      {categories.length > 0 && (
         <section className="card reveal" style={{ animationDelay: '80ms' }}>
           <h2>Gastos por categoria</h2>
           <ul className="categories">
-            {summary.expensesByCategory.map(c => (
+            {/* Já vêm do backend ordenadas pelo total: as primeiras são as maiores. */}
+            {visibleCategories.map(c => (
               // categoryId null ("Sem categoria") aparece no máximo uma vez.
               <li key={c.categoryId ?? 'none'}>
                 <div className="category-head">
@@ -299,16 +343,21 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
               </li>
             ))}
           </ul>
+          {categories.length > CATEGORY_PAGE && (
+            <button type="button" className="more-btn" onClick={() => setShowAllCategories(v => !v)}>
+              {showAllCategories ? 'Ver menos' : `Ver todas (${categories.length})`}
+            </button>
+          )}
         </section>
       )}
 
-      <section className="card reveal" style={{ animationDelay: '160ms' }}>
+      <section ref={transactionsCard} className="card reveal" style={{ animationDelay: '160ms' }}>
         <div className="card-head">
           <h2>Transações</h2>
           <div className="segmented small" role="tablist" aria-label="Filtrar transações">
             {FILTERS.map(f => (
               <button key={f.value} type="button" role="tab" aria-selected={filter === f.value}
-                      className={filter === f.value ? 'active' : ''} onClick={() => onFilterChange(f.value)}>
+                      className={filter === f.value ? 'active' : ''} onClick={() => changeFilter(f.value)}>
                 {f.label}
               </button>
             ))}
@@ -332,8 +381,10 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
               <ul className="transactions">
                 {group.items.map(tx => {
                   const kind = tx.type === 'INCOME' ? 'income' : 'expense'
-                  // Linhas entram em cascata; o teto de 12 evita esperar demais em listas longas.
-                  const delay = 200 + Math.min(rowIndex++, 12) * 40
+                  // Linhas entram em cascata. As que chegam pelo "Ver mais" recomeçam a
+                  // cascata do zero, sem esperar as linhas que já estavam na tela.
+                  const index = rowIndex++
+                  const delay = index < TX_PAGE ? 200 + index * 40 : (index % TX_PAGE) * 40
                   const content = (
                     <>
                       <span className={`tx-icon ${kind}`}>
@@ -369,6 +420,16 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
               </ul>
             </div>
           ))
+        )}
+
+        {hiddenCount > 0 ? (
+          <button type="button" className="more-btn" onClick={() => setTxLimit(l => l + TX_PAGE)}>
+            Ver mais ({hiddenCount} {hiddenCount === 1 ? 'restante' : 'restantes'})
+          </button>
+        ) : txLimit > TX_PAGE && filtered.length > TX_PAGE && (
+          <button type="button" className="more-btn" onClick={showLessTransactions}>
+            Ver menos
+          </button>
         )}
       </section>
     </>
