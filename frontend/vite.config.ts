@@ -39,31 +39,17 @@ export default defineConfig({
       },
       workbox: {
         // Cache só da "casca" do app (arquivos gerados pelo build).
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        globPatterns: [
+          '**/*.{js,css,html,svg,png,ico}',
+          // Da fonte, só o arquivo do alfabeto latino (os outros nunca são usados).
+          'assets/inter-latin-wght-normal-*.woff2',
+        ],
         // Navegar para /categorias etc. offline devolve o index.html (o react-router
         // resolve a rota). /api fica de fora: nunca responder API com HTML.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        // Nenhuma regra para /api: as chamadas à API SEMPRE vão para a rede e
+        // Sem runtimeCaching: as chamadas à API SEMPRE vão para a rede e
         // nunca são guardadas (dados financeiros não ficam no aparelho).
-        runtimeCaching: [
-          {
-            // CSS da fonte Inter: usa o cache, mas busca versão nova em segundo plano.
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-css' },
-          },
-          {
-            // Arquivos da fonte: nunca mudam para a mesma URL, cache por 1 ano.
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-files',
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
       },
     }),
   ],
