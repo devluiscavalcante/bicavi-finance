@@ -2,6 +2,7 @@ package com.bicavi.category;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.transaction.TransactionType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,14 @@ public class CategoryService {
 
         Category saved = repository.save(new Category(userId, name, request.type()));
         return CategoryResponse.from(saved);
+    }
+
+    // Chamado no cadastro: a conta é nova, então não há nome repetido para checar.
+    @Transactional
+    public void createDefaults(Long userId) {
+        repository.saveAll(DefaultCategories.EXPENSE.stream()
+                .map(name -> new Category(userId, name, TransactionType.EXPENSE))
+                .toList());
     }
 
     @Transactional

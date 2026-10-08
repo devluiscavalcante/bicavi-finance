@@ -1,5 +1,6 @@
 package com.bicavi.auth;
 
+import com.bicavi.category.CategoryService;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
@@ -30,16 +31,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final LoginRateLimiter loginRateLimiter;
+    private final CategoryService categoryService;
 
     // Hash de uma senha qualquer, usado quando o e-mail não existe (ver login).
     private final String dummyHash;
 
     public AuthService(UserRepository users, PasswordEncoder passwordEncoder, TokenService tokenService,
-                       LoginRateLimiter loginRateLimiter) {
+                       LoginRateLimiter loginRateLimiter, CategoryService categoryService) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.loginRateLimiter = loginRateLimiter;
+        this.categoryService = categoryService;
         this.dummyHash = passwordEncoder.encode("senha-ficticia-para-equalizar-tempo");
     }
 
@@ -55,6 +58,9 @@ public class AuthService {
 
         String hash = passwordEncoder.encode(request.password());
         User saved = users.save(new User(email, hash, request.name().trim()));
+        // Mesma transação do cadastro (@Transactional): se criar as categorias
+        // falhar, o usuário também não é gravado. Nada fica pela metade.
+        categoryService.createDefaults(saved.getId());
         return UserResponse.from(saved);
     }
 

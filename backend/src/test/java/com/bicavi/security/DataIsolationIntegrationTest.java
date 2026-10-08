@@ -153,9 +153,11 @@ class DataIsolationIntegrationTest {
 
     @Test
     void listsAndReportsShowOnlyOwnData() throws Exception {
+        // O Bob só vê as 12 categorias padrão dele; a "Mercado" da Alice não aparece.
         mockMvc.perform(get("/api/categories").header("Authorization", bearer(bobToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.length()").value(12))
+                .andExpect(jsonPath("$[?(@.name == 'Mercado')]").isEmpty());
         mockMvc.perform(get("/api/transactions").param("month", month).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));

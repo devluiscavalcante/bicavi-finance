@@ -1,5 +1,6 @@
 package com.bicavi.auth;
 
+import com.bicavi.category.CategoryService;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.TooManyRequestsException;
@@ -46,6 +47,9 @@ class AuthServiceTest {
     @Mock
     private LoginRateLimiter loginRateLimiter;
 
+    @Mock
+    private CategoryService categoryService;
+
     // BCrypt de verdade, para os testes mostrarem como ele se comporta.
     // spy = objeto real, mas que o Mockito consegue "espionar" com verify().
     private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder());
@@ -54,7 +58,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(users, passwordEncoder, tokenService, loginRateLimiter);
+        service = new AuthService(users, passwordEncoder, tokenService, loginRateLimiter, categoryService);
     }
 
     @Test
@@ -131,6 +135,26 @@ class AuthServiceTest {
         assertThat(hash).isNotEqualTo("senha-forte-123").startsWith("$2a$10$").hasSize(60);
         assertThat(passwordEncoder.matches("senha-forte-123", hash)).isTrue();
         assertThat(passwordEncoder.matches("senha-errada", hash)).isFalse();
+    }
+
+    @Test
+    void registerCreatesDefaultCategoriesForTheNewUser() {
+        when(users.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.register(new RegisterRequest("luis@example.com", "senha-forte-123", "Luis"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users).save(saved.capture());
+        verify(categoryService).createDefaults(saved.getValue().getId());
+    }
+
+    @Test
+    void registerWithEmailInUseCreatesNoCategories() {
+        when(users.existsByEmail("luis@example.com")).thenReturn(true);
+
+        catchThrowable(() -> service.register(new RegisterRequest("luis@example.com", "senha-forte-123", "Luis")));
+
+        verifyNoInteractions(categoryService);
     }
 
     @Test

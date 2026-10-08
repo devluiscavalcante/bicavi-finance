@@ -5,10 +5,12 @@ import com.bicavi.common.NotFoundException;
 import com.bicavi.transaction.TransactionType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +45,23 @@ class CategoryServiceTest {
         assertThat(response.name()).isEqualTo("Mercado");
         assertThat(response.type()).isEqualTo(TransactionType.EXPENSE);
         verify(repository).save(argThat(category -> category.getUserId().equals(USER)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createDefaultsSavesTheTwelveExpenseCategoriesForTheUser() {
+        service.createDefaults(USER);
+
+        ArgumentCaptor<List<Category>> saved = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveAll(saved.capture());
+        assertThat(saved.getValue()).hasSize(12)
+                .allSatisfy(category -> {
+                    assertThat(category.getUserId()).isEqualTo(USER);
+                    assertThat(category.getType()).isEqualTo(TransactionType.EXPENSE);
+                })
+                .extracting(Category::getName)
+                .containsExactlyElementsOf(DefaultCategories.EXPENSE)
+                .doesNotContain("Cartão de crédito");
     }
 
     @Test
