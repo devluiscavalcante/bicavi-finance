@@ -1254,3 +1254,9 @@ main {
 .more-btn:active {
   transform: scale(0.98);
 }
+
+/* Link dentro de uma dica (ex.: "Cadastre seus cartões"). */
+.hint a {
+  color: var(--text);
+  font-weight: 600;
+}

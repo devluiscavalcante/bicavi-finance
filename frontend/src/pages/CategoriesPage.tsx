@@ -1,12 +1,18 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { api, ApiError } from '../api'
 import { ConfirmDialog } from '../ConfirmDialog'
-import { Check, ChevronLeft, Close, Pencil, Tag, Trash } from '../icons'
-import type { CategoryResponse, TransactionType } from '../types'
+import { Check, ChevronLeft, Close, CreditCard, Pencil, Tag, Trash } from '../icons'
+import type { CardResponse, CategoryResponse, TransactionType } from '../types'
+
+// Categoria e cartão têm o mesmo formato na tela: id + nome, renomear e excluir.
+interface NamedItem {
+  id: number
+  name: string
+}
 
 // Ordem alfabética respeitando acentos ("Água" junto do "A", não depois do "Z").
-function sortByName(list: CategoryResponse[]) {
+function sortByName<T extends NamedItem>(list: T[]) {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
@@ -14,42 +20,91 @@ function errorMessage(e: unknown) {
   return e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor'
 }
 
-const LABELS: Record<TransactionType, { tab: string; singular: string; example: string }> = {
-  EXPENSE: { tab: 'Despesas', singular: 'despesa', example: 'Ex.: Mercado' },
-  INCOME: { tab: 'Receitas', singular: 'receita', example: 'Ex.: Salário' },
+// Abas: os dois tipos de categoria e os cartões.
+type Tab = TransactionType | 'CARDS'
+
+const TABS: Tab[] = ['EXPENSE', 'INCOME', 'CARDS']
+
+const LABELS: Record<Tab, { tab: string; newTitle: string; empty: string; example: string }> = {
+  EXPENSE: {
+    tab: 'Despesas', newTitle: 'Nova categoria de despesa',
+    empty: 'Nenhuma categoria de despesa ainda.', example: 'Ex.: Mercado',
+  },
+  INCOME: {
+    tab: 'Receitas', newTitle: 'Nova categoria de receita',
+    empty: 'Nenhuma categoria de receita ainda.', example: 'Ex.: Salário',
+  },
+  CARDS: {
+    tab: 'Cartões', newTitle: 'Novo cartão de crédito',
+    empty: 'Nenhum cartão cadastrado ainda.', example: 'Ex.: Banco do Brasil',
+  },
 }
 
 export function CategoriesPage() {
+  // A aba fica na URL (/categorias?aba=cartoes): o formulário de transação
+  // consegue mandar a pessoa direto para os cartões.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab: Tab = searchParams.get('aba') === 'cartoes' ? 'CARDS'
+    : searchParams.get('aba') === 'receitas' ? 'INCOME' : 'EXPENSE'
+
   const [categories, setCategories] = useState<CategoryResponse[] | null>(null)
+  const [cards, setCards] = useState<CardResponse[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [toDelete, setToDelete] = useState<CategoryResponse | null>(null)
-  // A aba escolhida filtra a lista E define o tipo da categoria criada.
-  const [type, setType] = useState<TransactionType>('EXPENSE')
+  const [toDelete, setToDelete] = useState<NamedItem | null>(null)
 
   useEffect(() => {
-    api<CategoryResponse[]>('/api/categories')
-      .then(list => setCategories(sortByName(list)))
+    Promise.all([api<CategoryResponse[]>('/api/categories'), api<CardResponse[]>('/api/cards')])
+      .then(([categoryList, cardList]) => {
+        setCategories(sortByName(categoryList))
+        setCards(sortByName(cardList))
+      })
       .catch(e => setLoadError(errorMessage(e)))
   }, [])
 
-  // As três operações atualizam a lista local com a RESPOSTA do backend,
-  // sem buscar tudo de novo: o servidor já devolve a categoria criada/renomeada.
-  function handleCreated(created: CategoryResponse) {
-    setCategories(list => sortByName([...(list ?? []), created]))
+  function changeTab(next: Tab) {
+    const aba = next === 'CARDS' ? 'cartoes' : next === 'INCOME' ? 'receitas' : null
+    // replace: trocar de aba não empilha entradas no "voltar" do navegador.
+    setSearchParams(aba ? { aba } : {}, { replace: true })
   }
 
-  function handleRenamed(renamed: CategoryResponse) {
-    setCategories(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? renamed : c))))
+  const isCards = tab === 'CARDS'
+  const path = isCards ? '/api/cards' : '/api/categories'
+  const loaded = isCards ? cards : categories
+  const items: NamedItem[] = isCards ? (cards ?? []) : (categories ?? []).filter(c => c.type === tab)
+
+  // As operações atualizam a lista local com a RESPOSTA do backend, sem buscar
+  // tudo de novo: o servidor já devolve o item criado/renomeado.
+  async function create(name: string) {
+    if (isCards) {
+      const created = await api<CardResponse>('/api/cards', { method: 'POST', body: JSON.stringify({ name }) })
+      setCards(list => sortByName([...(list ?? []), created]))
+    } else {
+      const created = await api<CategoryResponse>('/api/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name, type: tab }),
+      })
+      setCategories(list => sortByName([...(list ?? []), created]))
+    }
+  }
+
+  function handleRenamed(renamed: NamedItem) {
+    if (isCards) {
+      setCards(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? { ...c, ...renamed } : c))))
+    } else {
+      setCategories(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? { ...c, ...renamed } : c))))
+    }
   }
 
   async function confirmDelete() {
     const target = toDelete!
-    await api<void>(`/api/categories/${target.id}`, { method: 'DELETE' })
-    setCategories(list => (list ?? []).filter(c => c.id !== target.id))
+    await api<void>(`${path}/${target.id}`, { method: 'DELETE' })
+    if (isCards) {
+      setCards(list => (list ?? []).filter(c => c.id !== target.id))
+    } else {
+      setCategories(list => (list ?? []).filter(c => c.id !== target.id))
+    }
     setToDelete(null)
   }
-
-  const items = (categories ?? []).filter(c => c.type === type)
 
   return (
     <main>
@@ -57,32 +112,39 @@ export function CategoriesPage() {
         <Link to="/" className="icon-btn" aria-label="Voltar para o mês">
           <ChevronLeft />
         </Link>
-        <h1>Categorias</h1>
+        <h1>Categorias e cartões</h1>
       </header>
 
-      <div className="segmented reveal" role="tablist" aria-label="Tipo de categoria">
-        {(['EXPENSE', 'INCOME'] as const).map(t => (
-          <button key={t} type="button" role="tab" aria-selected={type === t}
-                  className={type === t ? 'active' : ''} onClick={() => setType(t)}>
+      <div className="segmented reveal" role="tablist" aria-label="O que gerenciar">
+        {TABS.map(t => (
+          <button key={t} type="button" role="tab" aria-selected={tab === t}
+                  className={tab === t ? 'active' : ''} onClick={() => changeTab(t)}>
             {LABELS[t].tab}
           </button>
         ))}
       </div>
 
-      {/* key={type}: trocar de aba recria o formulário, limpando nome e erro digitados. */}
-      <CreateCategoryForm key={type} type={type} onCreated={handleCreated} />
+      {/* key={tab}: trocar de aba recria o formulário, limpando nome e erro digitados. */}
+      <CreateItemForm key={tab} title={LABELS[tab].newTitle} placeholder={LABELS[tab].example}
+                      onCreate={create} />
 
       {loadError && <p className="error">{loadError}</p>}
-      {!categories && !loadError && <div className="skeleton" style={{ height: 200, marginTop: 16 }} />}
-      {categories && (
+      {!loaded && !loadError && <div className="skeleton" style={{ height: 200, marginTop: 16 }} />}
+      {loaded && (
         <section className="card reveal" style={{ animationDelay: '80ms' }}>
-          <h2>{LABELS[type].tab}</h2>
+          <h2>{LABELS[tab].tab}</h2>
+          {isCards && (
+            <p className="muted">
+              O cartão é escolhido nas compras no crédito. A categoria continua dizendo o tipo do gasto.
+            </p>
+          )}
           {items.length === 0 ? (
-            <p className="muted">Nenhuma categoria de {LABELS[type].singular} ainda.</p>
+            <p className="muted">{LABELS[tab].empty}</p>
           ) : (
             <ul className="category-list">
-              {items.map(c => (
-                <CategoryRow key={c.id} category={c} onRenamed={handleRenamed} onDelete={setToDelete} />
+              {items.map(item => (
+                <ItemRow key={item.id} item={item} path={path} icon={isCards ? <CreditCard /> : <Tag />}
+                         onRenamed={handleRenamed} onDelete={setToDelete} />
               ))}
             </ul>
           )}
@@ -92,7 +154,9 @@ export function CategoriesPage() {
       {toDelete && (
         <ConfirmDialog
           title={`Excluir "${toDelete.name}"?`}
-          message="As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'."
+          message={isCards
+            ? 'As compras deste cartão não serão apagadas: elas ficarão sem cartão.'
+            : "As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'."}
           confirmLabel="Excluir"
           onConfirm={confirmDelete}
           onCancel={() => setToDelete(null)}
@@ -102,9 +166,10 @@ export function CategoriesPage() {
   )
 }
 
-function CreateCategoryForm({ type, onCreated }: {
-  type: TransactionType
-  onCreated: (c: CategoryResponse) => void
+function CreateItemForm({ title, placeholder, onCreate }: {
+  title: string
+  placeholder: string
+  onCreate: (name: string) => Promise<void>
 }) {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -116,11 +181,7 @@ function CreateCategoryForm({ type, onCreated }: {
     setError(null)
     setSaving(true)
     try {
-      const created = await api<CategoryResponse>('/api/categories', {
-        method: 'POST',
-        body: JSON.stringify({ name: name.trim(), type }),
-      })
-      onCreated(created)
+      await onCreate(name.trim())
       setName('')
     } catch (e) {
       setError(errorMessage(e))
@@ -131,11 +192,11 @@ function CreateCategoryForm({ type, onCreated }: {
 
   return (
     <section className="card reveal" style={{ animationDelay: '40ms' }}>
-      <h2>Nova categoria de {LABELS[type].singular}</h2>
+      <h2>{title}</h2>
       <form onSubmit={handleSubmit}>
         <div className="inline-form">
           <input value={name} onChange={e => setName(e.target.value)} maxLength={50}
-                 placeholder={LABELS[type].example} aria-label="Nome da categoria" />
+                 placeholder={placeholder} aria-label="Nome" />
           <button type="submit" className="btn-primary" disabled={saving || name.trim() === ''}>
             {saving ? '...' : 'Adicionar'}
           </button>
@@ -146,18 +207,20 @@ function CreateCategoryForm({ type, onCreated }: {
   )
 }
 
-function CategoryRow({ category, onRenamed, onDelete }: {
-  category: CategoryResponse
-  onRenamed: (c: CategoryResponse) => void
-  onDelete: (c: CategoryResponse) => void
+function ItemRow({ item, path, icon, onRenamed, onDelete }: {
+  item: NamedItem
+  path: string // '/api/categories' ou '/api/cards'
+  icon: ReactNode
+  onRenamed: (item: NamedItem) => void
+  onDelete: (item: NamedItem) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(category.name)
+  const [name, setName] = useState(item.name)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   function startEditing() {
-    setName(category.name)
+    setName(item.name)
     setError(null)
     setEditing(true)
   }
@@ -165,15 +228,15 @@ function CategoryRow({ category, onRenamed, onDelete }: {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const trimmed = name.trim()
-    if (trimmed === '' || trimmed === category.name) {
+    if (trimmed === '' || trimmed === item.name) {
       setEditing(false)
       return
     }
     setSaving(true)
     setError(null)
     try {
-      // PUT só aceita o nome: o tipo não muda depois de criado (regra do backend).
-      const renamed = await api<CategoryResponse>(`/api/categories/${category.id}`, {
+      // PUT só aceita o nome (de uma categoria, o tipo não muda depois de criado).
+      const renamed = await api<NamedItem>(`${path}/${item.id}`, {
         method: 'PUT',
         body: JSON.stringify({ name: trimmed }),
       })
@@ -210,15 +273,15 @@ function CategoryRow({ category, onRenamed, onDelete }: {
   return (
     <li className="category-row">
       <div className="category-name">
-        <span className="tx-icon"><Tag /></span>
-        <span>{category.name}</span>
+        <span className="tx-icon">{icon}</span>
+        <span>{item.name}</span>
       </div>
       <div className="row-actions">
-        <button className="icon-btn ghost" aria-label={`Renomear ${category.name}`} onClick={startEditing}>
+        <button className="icon-btn ghost" aria-label={`Renomear ${item.name}`} onClick={startEditing}>
           <Pencil />
         </button>
-        <button className="icon-btn ghost danger" aria-label={`Excluir ${category.name}`}
-                onClick={() => onDelete(category)}>
+        <button className="icon-btn ghost danger" aria-label={`Excluir ${item.name}`}
+                onClick={() => onDelete(item)}>
           <Trash />
         </button>
       </div>

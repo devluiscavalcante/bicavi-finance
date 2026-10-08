@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { api, ApiError } from './api'
 import { ConfirmDialog } from './ConfirmDialog'
 import { formatPaymentMethod, installmentPreview, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
 import type {
-  CategoryResponse, EditScope, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest,
+  CardResponse, CategoryResponse, EditScope, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest,
   TransactionResponse, TransactionType,
 } from './types'
 
@@ -37,6 +38,9 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   // 30.5 -> "30,5": o mesmo formato que a pessoa digitaria.
   const [amountText, setAmountText] = useState(transaction ? String(transaction.amount).replace('.', ',') : '')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(transaction?.paymentMethod ?? null)
+  // '' = nenhum. Uma despesa antiga no crédito pode chegar sem cartão: o campo
+  // aparece vazio e o salvar pede para escolher.
+  const [cardId, setCardId] = useState(transaction?.cardId?.toString() ?? '')
   const [categoryId, setCategoryId] = useState(transaction?.categoryId?.toString() ?? '') // '' = sem categoria
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [occurredOn, setOccurredOn] = useState(transaction?.occurredOn ?? defaultDate)
@@ -45,6 +49,8 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   // Editando parcela: "só esta" ou "esta e as próximas" (vale para salvar e excluir).
   const [scope, setScope] = useState<EditScope>('THIS')
   const [categories, setCategories] = useState<CategoryResponse[]>([])
+  // null = ainda carregando (não mostra "nenhum cartão" antes da resposta chegar).
+  const [cards, setCards] = useState<CardResponse[] | null>(null)
 
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -55,6 +61,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const split = canSplit && installments > 1
   const previewAmount = parseAmount(amountText)
   const applyToFollowing = isInstallment && scope === 'FOLLOWING'
+  const isCredit = type === 'EXPENSE' && paymentMethod === 'CREDITO'
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -69,7 +76,21 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
     api<CategoryResponse[]>('/api/categories').then(setCategories).catch(() => {
       // Sem categorias o formulário ainda funciona ("Sem categoria").
     })
+    api<CardResponse[]>('/api/cards')
+      .then(list => setCards([...list].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))))
+      .catch(() => setCards([]))
   }, [])
+
+  // Cartão só existe no crédito: trocar a forma de pagamento limpa a escolha.
+  // Com um único cartão cadastrado, o crédito já vem com ele selecionado.
+  function changePaymentMethod(next: PaymentMethod) {
+    setPaymentMethod(next)
+    if (next !== 'CREDITO') {
+      setCardId('')
+    } else if (cardId === '' && cards?.length === 1) {
+      setCardId(String(cards[0].id))
+    }
+  }
 
   // Receita não tem forma de pagamento, nem parcelas, e as categorias são de
   // outro tipo: ao trocar o tipo, limpamos tudo isso para não enviar algo que o
@@ -77,6 +98,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   function changeType(next: TransactionType) {
     setType(next)
     setPaymentMethod(null)
+    setCardId('')
     setCategoryId('')
     setInstallments(1)
   }
@@ -95,6 +117,9 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
     if (type === 'EXPENSE' && paymentMethod === null) {
       localErrors.paymentMethod = 'Escolha a forma de pagamento'
     }
+    if (isCredit && cardId === '') {
+      localErrors.cardId = 'Escolha o cartão da compra'
+    }
     if (occurredOn === '') {
       localErrors.occurredOn = 'Informe a data'
     }
@@ -104,6 +129,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
     }
 
     const categoryValue = categoryId === '' ? null : Number(categoryId)
+    const cardValue = isCredit ? Number(cardId) : null
     const descriptionValue = description.trim() === '' ? null : description.trim()
 
     setSaving(true)
@@ -114,6 +140,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
           totalAmount: amount!,
           installments,
           paymentMethod,
+          cardId: cardValue,
           categoryId: categoryValue,
           description: descriptionValue,
           firstDate: occurredOn,
@@ -129,6 +156,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
           amount: amount!,
           type,
           paymentMethod: type === 'EXPENSE' ? paymentMethod : null,
+          cardId: cardValue,
           categoryId: categoryValue,
           description: descriptionValue,
           occurredOn,
@@ -225,7 +253,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
               </div>
               {applyToFollowing && (
                 <span className="hint">
-                  Categoria, forma de pagamento e descrição valem também para as {followingCount} parcela(s)
+                  Categoria, forma de pagamento, cartão e descrição valem também para as {followingCount} parcela(s)
                   seguinte(s). Valor e data mudam só nesta.
                 </span>
               )}
@@ -250,7 +278,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
                 {PAYMENT_METHODS.map(m => (
                   <button key={m} type="button" role="radio" aria-checked={paymentMethod === m}
                           className={paymentMethod === m ? 'chip active' : 'chip'}
-                          onClick={() => setPaymentMethod(m)}>
+                          onClick={() => changePaymentMethod(m)}>
                     {formatPaymentMethod(m)}
                   </button>
                 ))}
@@ -258,6 +286,26 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
               {fieldErrors.paymentMethod && <p className="field-error">{fieldErrors.paymentMethod}</p>}
             </div>
           )}
+
+          {isCredit && cards !== null && (
+            cards.length === 0 ? (
+              <p className="hint">
+                Nenhum cartão cadastrado.{' '}
+                <Link to="/categorias?aba=cartoes">Cadastre seus cartões</Link> para lançar compras no crédito.
+              </p>
+            ) : (
+              <label>
+                Cartão
+                <select value={cardId} onChange={e => setCardId(e.target.value)}>
+                  <option value="" disabled>Escolha o cartão</option>
+                  {cards.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+            )
+          )}
+          {fieldErrors.cardId && <p className="field-error">{fieldErrors.cardId}</p>}
 
           {canSplit && (
             <label>

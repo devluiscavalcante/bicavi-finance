@@ -24,6 +24,8 @@ export interface TransactionResponse {
   amount: number
   type: TransactionType
   paymentMethod: PaymentMethod | null // null em receitas
+  cardId: number | null // só no crédito (despesas antigas no crédito podem estar sem)
+  cardName: string | null
   categoryId: number | null
   categoryName: string | null
   description: string | null
@@ -62,11 +64,19 @@ export interface CategoryResponse {
   type: TransactionType
 }
 
+// Cartão de crédito: separado das categorias (categoria = o que comprei,
+// cartão = como paguei).
+export interface CardResponse {
+  id: number
+  name: string
+}
+
 // Corpo do POST /api/transactions/installments (compra parcelada, sempre despesa).
 export interface InstallmentRequest {
   totalAmount: number // total da compra; o backend divide
   installments: number // 2 a 24
   paymentMethod: PaymentMethod | null
+  cardId: number | null // obrigatório no crédito; o mesmo em todas as parcelas
   categoryId: number | null
   description: string | null
   firstDate: string // data da 1ª parcela; as demais nos meses seguintes
@@ -77,6 +87,7 @@ export interface TransactionRequest {
   amount: number
   type: TransactionType
   paymentMethod: PaymentMethod | null
+  cardId: number | null // obrigatório no crédito, proibido nas demais formas
   categoryId: number | null
   description: string | null
   occurredOn: string

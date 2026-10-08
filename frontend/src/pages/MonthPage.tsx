@@ -395,6 +395,7 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
                         <small>
                           {tx.categoryName ?? 'Sem categoria'}
                           {tx.paymentMethod && ` · ${formatPaymentMethod(tx.paymentMethod)}`}
+                          {tx.cardName && ` · ${tx.cardName}`}
                         </small>
                       </div>
                       <span className={`tx-amount ${kind}`}>

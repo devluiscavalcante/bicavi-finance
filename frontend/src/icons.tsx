@@ -62,3 +62,10 @@ export const Trash = () => (
 )
 
 export const Check = () => <Icon><path d="M20 6 9 17l-5-5" /></Icon>
+
+export const CreditCard = () => (
+  <Icon>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <path d="M2 10h20" />
+  </Icon>
+)
