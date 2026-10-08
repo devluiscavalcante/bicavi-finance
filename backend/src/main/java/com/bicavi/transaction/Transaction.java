@@ -1,5 +1,6 @@
 package com.bicavi.transaction;
 
+import com.bicavi.card.Card;
 import com.bicavi.category.Category;
 import com.bicavi.common.BusinessRuleException;
 import jakarta.persistence.Column;
@@ -51,6 +52,12 @@ public class Transaction {
     @Column(name = "payment_method", length = 10)
     private PaymentMethod paymentMethod;
 
+    // Cartão da compra no crédito (null nas demais formas). LAZY como a categoria.
+    // Regras em validate(); o banco só garante "cartão só no crédito" (V8).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_id")
+    private Card card;
+
     @Column(length = 255)
     private String description;
 
@@ -76,10 +83,10 @@ public class Transaction {
 
     // Parcela "number" de "count" de uma compra. Sempre despesa.
     public static Transaction installment(Long userId, Category category, BigDecimal amount,
-                                          PaymentMethod paymentMethod, String description, LocalDate occurredOn,
-                                          UUID group, int number, int count) {
+                                          PaymentMethod paymentMethod, Card card, String description,
+                                          LocalDate occurredOn, UUID group, int number, int count) {
         Transaction tx = new Transaction(userId, category, amount, TransactionType.EXPENSE,
-                paymentMethod, description, occurredOn);
+                paymentMethod, card, description, occurredOn);
         tx.installmentGroup = group;
         tx.installmentNumber = number;
         tx.installmentCount = count;
@@ -91,22 +98,22 @@ public class Transaction {
     }
 
     public Transaction(Long userId, Category category, BigDecimal amount, TransactionType type,
-                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
+                       PaymentMethod paymentMethod, Card card, String description, LocalDate occurredOn) {
         this.userId = userId;
-        apply(category, amount, type, paymentMethod, description, occurredOn);
+        apply(category, amount, type, paymentMethod, card, description, occurredOn);
         this.createdAt = Instant.now();
     }
 
     // Substitui todos os dados editáveis, aplicando as mesmas regras da criação.
     public void update(Category category, BigDecimal amount, TransactionType type,
-                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
-        apply(category, amount, type, paymentMethod, description, occurredOn);
+                       PaymentMethod paymentMethod, Card card, String description, LocalDate occurredOn) {
+        apply(category, amount, type, paymentMethod, card, description, occurredOn);
     }
 
     // private: não pode ser sobrescrito, então é seguro chamar no construtor.
     private void apply(Category category, BigDecimal amount, TransactionType type,
-                       PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
-        validate(category, amount, type, paymentMethod, occurredOn);
+                       PaymentMethod paymentMethod, Card card, String description, LocalDate occurredOn) {
+        validate(category, amount, type, paymentMethod, card, occurredOn);
         // Parcela é despesa de uma compra: virar receita não faz sentido.
         if (installmentGroup != null && type != TransactionType.EXPENSE) {
             throw new BusinessRuleException("Parcelas de uma compra são sempre despesas");
@@ -116,16 +123,20 @@ public class Transaction {
         if (category != null && !category.getUserId().equals(userId)) {
             throw new IllegalStateException("Categoria de outro usuário associada à transação");
         }
+        if (card != null && !card.getUserId().equals(userId)) {
+            throw new IllegalStateException("Cartão de outro usuário associado à transação");
+        }
         this.category = category;
         this.amount = amount;
         this.type = type;
         this.paymentMethod = paymentMethod;
+        this.card = card;
         this.description = description;
         this.occurredOn = occurredOn;
     }
 
     private static void validate(Category category, BigDecimal amount, TransactionType type,
-                                 PaymentMethod paymentMethod, LocalDate occurredOn) {
+                                 PaymentMethod paymentMethod, Card card, LocalDate occurredOn) {
         if (amount == null || amount.signum() <= 0) {
             throw new BusinessRuleException("O valor deve ser maior que zero");
         }
@@ -141,6 +152,15 @@ public class Transaction {
         }
         if (type == TransactionType.INCOME && paymentMethod != null) {
             throw new BusinessRuleException("Receitas não têm forma de pagamento");
+        }
+        // Vale para o que é criado ou editado agora. Despesas no crédito lançadas
+        // antes dos cartões existirem estão no banco sem cartão; ao editar uma
+        // delas, esta regra pede o cartão.
+        if (paymentMethod == PaymentMethod.CREDITO && card == null) {
+            throw new BusinessRuleException("Informe o cartão da compra no crédito");
+        }
+        if (paymentMethod != PaymentMethod.CREDITO && card != null) {
+            throw new BusinessRuleException("Cartão só pode ser informado em compras no crédito");
         }
         if (occurredOn == null) {
             throw new BusinessRuleException("A data é obrigatória");
@@ -161,6 +181,10 @@ public class Transaction {
 
     public Category getCategory() {
         return category;
+    }
+
+    public Card getCard() {
+        return card;
     }
 
     public BigDecimal getAmount() {

@@ -18,6 +18,7 @@ public record InstallmentRequest(
         @NotNull @Positive @Digits(integer = 10, fraction = 2) BigDecimal totalAmount,
         @NotNull @Min(2) @Max(24) Integer installments,
         PaymentMethod paymentMethod,  // obrigatório (é despesa); validado na entidade
+        Long cardId,  // obrigatório no CREDITO; o mesmo cartão em todas as parcelas
         Long categoryId,
         // Mesma descrição em todas as parcelas; o "(2/3)" vem de installmentNumber/Count.
         @Size(max = 255) String description,

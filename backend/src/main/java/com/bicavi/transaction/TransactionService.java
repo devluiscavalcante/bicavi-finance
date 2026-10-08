@@ -1,5 +1,7 @@
 package com.bicavi.transaction;
 
+import com.bicavi.card.Card;
+import com.bicavi.card.CardRepository;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
 import com.bicavi.common.BusinessRuleException;
@@ -23,12 +25,14 @@ public class TransactionService {
 
     private final TransactionRepository transactions;
     private final CategoryRepository categories;
+    private final CardRepository cards;
     private final PeriodPolicy period;
 
     public TransactionService(TransactionRepository transactions, CategoryRepository categories,
-                              PeriodPolicy period) {
+                              CardRepository cards, PeriodPolicy period) {
         this.transactions = transactions;
         this.categories = categories;
+        this.cards = cards;
         this.period = period;
     }
 
@@ -55,6 +59,7 @@ public class TransactionService {
                 request.amount(),
                 request.type(),
                 request.paymentMethod(),
+                findCard(userId, request.cardId()),
                 normalize(request.description()),
                 request.occurredOn());
         return TransactionResponse.from(transactions.save(tx));
@@ -72,6 +77,8 @@ public class TransactionService {
         }
 
         Category category = findCategory(userId, request.categoryId());
+        // O mesmo cartão em todas as parcelas.
+        Card card = findCard(userId, request.cardId());
         // A descrição é a mesma em todas ("PS5"); o "(1/3)" vem de installmentNumber/Count.
         String description = normalize(request.description());
         List<BigDecimal> amounts = Installments.split(request.totalAmount(), count);
@@ -85,6 +92,7 @@ public class TransactionService {
                     category,
                     amounts.get(i),
                     request.paymentMethod(),
+                    card,
                     description,
                     // Sempre a partir da 1ª data (e não "mês anterior + 1"): 31/01 vira
                     // 28/02 e depois volta a 31/03, sem ficar preso no dia 28.
@@ -110,13 +118,14 @@ public class TransactionService {
         period.checkEditable(request.occurredOn());
 
         Category category = findCategory(userId, request.categoryId());
+        Card card = findCard(userId, request.cardId());
         String description = normalize(request.description());
-        tx.update(category, request.amount(), request.type(), request.paymentMethod(), description,
+        tx.update(category, request.amount(), request.type(), request.paymentMethod(), card, description,
                 request.occurredOn());
 
         for (Transaction next : followingInstallments(userId, tx, scope)) {
             // Mantém valor, tipo e data da própria parcela; as regras de validação são as mesmas.
-            next.update(category, next.getAmount(), next.getType(), request.paymentMethod(), description,
+            next.update(category, next.getAmount(), next.getType(), request.paymentMethod(), card, description,
                     next.getOccurredOn());
         }
         return TransactionResponse.from(tx);
@@ -159,6 +168,16 @@ public class TransactionService {
         }
         return categories.findByIdAndUserId(categoryId, userId)
                 .orElseThrow(() -> new BusinessRuleException("Categoria " + categoryId + " não existe"));
+    }
+
+    // Mesma ideia de findCategory: cartão de outro usuário e cartão inexistente
+    // dão a MESMA resposta (400), sem confirmar que o id existe.
+    private Card findCard(Long userId, Long cardId) {
+        if (cardId == null) {
+            return null;
+        }
+        return cards.findByIdAndUserId(cardId, userId)
+                .orElseThrow(() -> new BusinessRuleException("Cartão " + cardId + " não existe"));
     }
 
     private static String normalize(String description) {

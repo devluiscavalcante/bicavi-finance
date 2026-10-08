@@ -130,10 +130,10 @@ class ReportServiceTest {
     }
 
     private static Transaction income(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, null, null, DAY);
     }
 
     private static Transaction expense(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY);
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY);
     }
 }

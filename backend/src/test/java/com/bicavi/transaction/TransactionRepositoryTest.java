@@ -1,8 +1,11 @@
 package com.bicavi.transaction;
 
 import com.bicavi.TestcontainersConfiguration;
+import com.bicavi.card.Card;
+import com.bicavi.card.CardRepository;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
+import com.bicavi.common.BusinessRuleException;
 import com.bicavi.user.User;
 import com.bicavi.user.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -41,6 +44,9 @@ class TransactionRepositoryTest {
     private CategoryRepository categories;
 
     @Autowired
+    private CardRepository cards;
+
+    @Autowired
     private UserRepository users;
 
     @Autowired
@@ -51,18 +57,20 @@ class TransactionRepositoryTest {
 
     private Long alice;
     private Long bob;
+    private Card aliceCard;  // compras no crédito exigem cartão
 
     @BeforeEach
     void createUsers() {
         alice = users.save(new User("alice@example.com", "$2a$10$hash", "Alice")).getId();
         bob = users.save(new User("bob@example.com", "$2a$10$hash", "Bob")).getId();
+        aliceCard = cards.save(new Card(alice, "Nubank"));
     }
 
     @Test
     void savesAndReadsTransactionWithCategory() {
         Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
         Long id = transactions.save(
-                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, "Feira", DAY)).getId();
+                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, "Feira", DAY)).getId();
         flushAndClear();
 
         Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
@@ -83,7 +91,7 @@ class TransactionRepositoryTest {
     void storesMoneyExactly() {
         // Em double, 0.1 + 0.2 = 0.30000000000000004. Com BigDecimal + NUMERIC, é exato.
         BigDecimal amount = new BigDecimal("0.1").add(new BigDecimal("0.2"));
-        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, PaymentMethod.PIX, null, DAY)).getId();
+        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY)).getId();
         flushAndClear();
 
         BigDecimal inDb = jdbc.queryForObject("SELECT amount FROM transactions WHERE id = ?", BigDecimal.class, id);
@@ -127,16 +135,17 @@ class TransactionRepositoryTest {
     }
 
     @Test
-    void savesAndReadsPaymentMethod() {
+    void savesAndReadsPaymentMethodAndCard() {
         Long id = transactions.save(new Transaction(
-                alice, null, new BigDecimal("30.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, "Caderno", DAY)).getId();
+                alice, null, new BigDecimal("30.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, aliceCard, "Caderno", DAY)).getId();
         flushAndClear();
 
         // Grava o NOME do enum (EnumType.STRING), não a posição (0, 1, 2...).
         String inDb = jdbc.queryForObject("SELECT payment_method FROM transactions WHERE id = ?", String.class, id);
         assertThat(inDb).isEqualTo("CREDITO");
-        assertThat(transactions.findByIdAndUserId(id, alice).orElseThrow().getPaymentMethod())
-                .isEqualTo(PaymentMethod.CREDITO);
+        Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
+        assertThat(found.getPaymentMethod()).isEqualTo(PaymentMethod.CREDITO);
+        assertThat(found.getCard().getName()).isEqualTo("Nubank");
     }
 
     @Test
@@ -210,10 +219,12 @@ class TransactionRepositoryTest {
     }
 
     @Test
-    void findInPeriodLoadsCategoriesInASingleQuery() {
+    void findInPeriodLoadsCategoriesAndCardsInASingleQuery() {
         for (int i = 1; i <= 5; i++) {
             Category category = categories.save(new Category(alice, "Categoria " + i, TransactionType.EXPENSE));
-            saveExpense(alice, category, "gasto " + i, DAY);
+            Card card = cards.save(new Card(alice, "Cartão " + i));
+            transactions.save(new Transaction(alice, category, new BigDecimal("10.00"), TransactionType.EXPENSE,
+                    PaymentMethod.CREDITO, card, "gasto " + i, DAY));
         }
         flushAndClear();
 
@@ -222,11 +233,39 @@ class TransactionRepositoryTest {
         stats.clear();
 
         List<Transaction> result = transactions.findInPeriod(alice, OCT_1, NOV_1, null);
-        result.forEach(tx -> tx.getCategory().getName()); // acessa cada categoria
+        // Acessa cada categoria e cada cartão, como o TransactionResponse faz.
+        result.forEach(tx -> {
+            tx.getCategory().getName();
+            tx.getCard().getName();
+        });
 
-        // Sem o JOIN FETCH seriam 6 consultas: 1 para as transações + 1 por categoria (N+1).
+        // Sem os JOIN FETCH seriam 11 consultas: 1 para as transações
+        // + 1 por categoria + 1 por cartão (o problema N+1).
         assertThat(result).hasSize(5);
         assertThat(stats.getPrepareStatementCount()).isEqualTo(1);
+    }
+
+    // Despesa no crédito de antes da V8: está no banco sem cartão. Ela continua
+    // sendo lida normalmente, mas para salvar uma edição é preciso informar o cartão.
+    @Test
+    void legacyCreditExpenseWithoutCardLoadsButRequiresCardWhenEdited() {
+        Long id = jdbc.queryForObject("""
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, 30.00, 'EXPENSE', 'CREDITO', ?, now())
+                RETURNING id
+                """, Long.class, alice, DAY);
+
+        Transaction legacy = transactions.findByIdAndUserId(id, alice).orElseThrow();
+        assertThat(legacy.getCard()).isNull();
+
+        assertThatThrownBy(() -> legacy.update(null, legacy.getAmount(), TransactionType.EXPENSE,
+                PaymentMethod.CREDITO, null, null, DAY))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Informe o cartão da compra no crédito");
+
+        legacy.update(null, legacy.getAmount(), TransactionType.EXPENSE, PaymentMethod.CREDITO, aliceCard, null, DAY);
+        flushAndClear();
+        assertThat(transactions.findByIdAndUserId(id, alice).orElseThrow().getCard().getName()).isEqualTo("Nubank");
     }
 
     @Test
@@ -234,10 +273,10 @@ class TransactionRepositoryTest {
         UUID ps5 = UUID.randomUUID();
         UUID tv = UUID.randomUUID();
         for (int n = 1; n <= 3; n++) {
-            transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO,
+            transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO, aliceCard,
                     "PS5", DAY.plusMonths(n - 1), ps5, n, 3));
         }
-        transactions.save(Transaction.installment(alice, null, new BigDecimal("50.00"), PaymentMethod.CREDITO,
+        transactions.save(Transaction.installment(alice, null, new BigDecimal("50.00"), PaymentMethod.CREDITO, aliceCard,
                 "TV", DAY.plusMonths(1), tv, 2, 2));
         flushAndClear();
 
@@ -251,7 +290,7 @@ class TransactionRepositoryTest {
     @Test
     void savesInstallmentColumnsAsUuidAndIntegers() {
         UUID group = UUID.randomUUID();
-        Long id = transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO,
+        Long id = transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO, aliceCard,
                 "PS5", DAY, group, 2, 3)).getId();
         flushAndClear();
 
@@ -289,7 +328,7 @@ class TransactionRepositoryTest {
 
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
         return transactions.save(new Transaction(
-                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, PaymentMethod.PIX, description, day)).getId();
+                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, PaymentMethod.PIX, null, description, day)).getId();
     }
 
     // flush: envia ao banco os comandos SQL pendentes.

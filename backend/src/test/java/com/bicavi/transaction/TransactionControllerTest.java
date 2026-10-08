@@ -55,7 +55,7 @@ class TransactionControllerTest {
     @Test
     void listParsesMonthAndPassesLoggedUser() throws Exception {
         when(service.list(USER, YearMonth.of(2026, 10), 3L)).thenReturn(List.of(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6), null, null)));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6), null, null)));
 
         mockMvc.perform(get("/api/transactions").with(loggedUser()).param("month", "2026-10").param("categoryId", "3"))
                 .andExpect(status().isOk())
@@ -86,7 +86,7 @@ class TransactionControllerTest {
     @Test
     void createReturns201() throws Exception {
         when(service.create(eq(USER), any())).thenReturn(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, LocalDate.of(2026, 10, 6), null, null));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, null, null, LocalDate.of(2026, 10, 6), null, null));
 
         mockMvc.perform(post("/api/transactions").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -97,15 +97,15 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$.id").value(1));
 
         verify(service).create(USER, new TransactionRequest(
-                new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, LocalDate.of(2026, 10, 6)));
+                new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, LocalDate.of(2026, 10, 6)));
     }
 
     @Test
     void createInstallmentsReturns201WithAllParts() throws Exception {
         when(service.createInstallments(eq(USER), any())).thenReturn(List.of(
-                new TransactionResponse(1L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
+                new TransactionResponse(1L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null,
                         null, null, "TV", LocalDate.of(2026, 11, 10), 1, 2),
-                new TransactionResponse(2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
+                new TransactionResponse(2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null,
                         null, null, "TV", LocalDate.of(2026, 12, 10), 2, 2)));
 
         mockMvc.perform(post("/api/transactions/installments").with(loggedUser())
@@ -119,7 +119,7 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$[1].installmentNumber").value(2));
 
         verify(service).createInstallments(USER, new InstallmentRequest(
-                new BigDecimal("100"), 2, PaymentMethod.CREDITO, null, "TV", LocalDate.of(2026, 11, 10)));
+                new BigDecimal("100"), 2, PaymentMethod.CREDITO, null, null, "TV", LocalDate.of(2026, 11, 10)));
     }
 
     @Test
@@ -140,7 +140,7 @@ class TransactionControllerTest {
     @Test
     void updatePassesScopeFromQueryParameter() throws Exception {
         when(service.update(eq(USER), eq(2L), any(), eq(EditScope.FOLLOWING))).thenReturn(new TransactionResponse(
-                2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null, "TV",
+                2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null, null, null, "TV",
                 LocalDate.of(2026, 12, 10), 2, 2));
 
         mockMvc.perform(put("/api/transactions/2").with(loggedUser()).param("scope", "FOLLOWING")

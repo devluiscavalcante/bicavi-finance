@@ -17,7 +17,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     // JPQL: parecido com SQL, mas fala de entidades e atributos Java
     // (Transaction, t.occurredOn), não de tabelas e colunas.
     //
-    // LEFT JOIN FETCH traz a categoria na MESMA consulta (evita o problema N+1).
+    // LEFT JOIN FETCH traz a categoria e o cartão na MESMA consulta (evita o problema N+1).
     // LEFT porque transações sem categoria também devem aparecer.
     //
     // user_id + intervalo meio-aberto [start, end): usa o índice
@@ -25,6 +25,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("""
             SELECT t FROM Transaction t
             LEFT JOIN FETCH t.category c
+            LEFT JOIN FETCH t.card
             WHERE t.userId = :userId
               AND t.occurredOn >= :start AND t.occurredOn < :end
               AND (:categoryId IS NULL OR c.id = :categoryId)

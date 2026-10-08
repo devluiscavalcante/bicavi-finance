@@ -14,6 +14,7 @@ public record TransactionRequest(
         @NotNull @Positive @Digits(integer = 10, fraction = 2) BigDecimal amount,
         @NotNull TransactionType type,
         PaymentMethod paymentMethod,  // obrigatório em despesas; validado na entidade
+        Long cardId,  // obrigatório no CREDITO, proibido nas demais; validado na entidade
         Long categoryId,  // opcional: null = sem categoria
         @Size(max = 255) String description,
         @NotNull LocalDate occurredOn

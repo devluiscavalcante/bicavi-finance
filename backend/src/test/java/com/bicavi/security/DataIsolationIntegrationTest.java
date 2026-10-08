@@ -127,6 +127,20 @@ class DataIsolationIntegrationTest {
     }
 
     @Test
+    void bobCannotUseAlicesCardInHisTransaction() throws Exception {
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
+                {"name": "Nubank"}
+                """);
+
+        mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"amount": 10, "type": "EXPENSE", "paymentMethod": "CREDITO", "cardId": %d, "occurredOn": "%s"}
+                                """.formatted(aliceCardId, today)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Cartão " + aliceCardId + " não existe"));
+    }
+
+    @Test
     void bobCannotUseAlicesCategoryInHisTransaction() throws Exception {
         mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
