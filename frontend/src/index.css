@@ -1260,3 +1260,29 @@ main {
   color: var(--text);
   font-weight: 600;
 }
+
+/* ---------- Faturas do mês ---------- */
+
+/* Fatura escolhida como filtro da lista de transações. */
+.tx-row.selected {
+  background: var(--surface-2);
+}
+
+/* "Fatura Nubank ×" acima da lista filtrada: tocar remove o filtro. */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.filter-chip svg {
+  width: 14px;
+  height: 14px;
+}

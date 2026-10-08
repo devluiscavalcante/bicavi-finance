@@ -43,13 +43,17 @@ class ReportControllerTest {
                 new BigDecimal("5000.00"),
                 new BigDecimal("470.50"),
                 new BigDecimal("4529.50"),
-                List.of(new CategoryTotal(1L, "Mercado", new BigDecimal("350.50")))));
+                List.of(new CategoryTotal(1L, "Mercado", new BigDecimal("350.50"))),
+                List.of(new CardTotal(4L, "Nubank", new BigDecimal("120.00"), 3))));
 
         mockMvc.perform(get("/api/reports/monthly-summary").with(loggedUser()).param("month", "2026-10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.month").value("2026-10"))
                 .andExpect(jsonPath("$.balance").value(4529.50))
-                .andExpect(jsonPath("$.expensesByCategory[0].categoryName").value("Mercado"));
+                .andExpect(jsonPath("$.expensesByCategory[0].categoryName").value("Mercado"))
+                .andExpect(jsonPath("$.expensesByCard[0].cardName").value("Nubank"))
+                .andExpect(jsonPath("$.expensesByCard[0].total").value(120.00))
+                .andExpect(jsonPath("$.expensesByCard[0].purchases").value(3));
     }
 
     @Test

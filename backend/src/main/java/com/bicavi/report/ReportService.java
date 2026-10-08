@@ -1,7 +1,9 @@
 package com.bicavi.report;
 
+import com.bicavi.card.Card;
 import com.bicavi.category.Category;
 import com.bicavi.period.PeriodPolicy;
+import com.bicavi.transaction.PaymentMethod;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
 import com.bicavi.transaction.TransactionType;
@@ -26,6 +28,7 @@ public class ReportService {
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final String UNCATEGORIZED = "Sem categoria";
+    private static final String CREDIT_WITHOUT_CARD = "Crédito sem cartão";
 
     private final TransactionRepository transactions;
     private final PeriodPolicy period;
@@ -48,7 +51,8 @@ public class ReportService {
                 income,
                 expense,
                 income.subtract(expense),
-                expensesByCategory(all));
+                expensesByCategory(all),
+                expensesByCard(all));
     }
 
     private static BigDecimal sum(List<Transaction> all, TransactionType type) {
@@ -72,6 +76,36 @@ public class ReportService {
                 .sorted(Comparator.comparing(CategoryTotal::total).reversed()
                         .thenComparing(CategoryTotal::categoryName))
                 .toList();
+    }
+
+    // Fatura de cada cartão = compras no crédito do mês com aquele cartão.
+    // Funciona porque a compra no crédito é lançada na data de vencimento da
+    // fatura (regra combinada): as compras do mês SÃO a fatura do mês.
+    private static List<CardTotal> expensesByCard(List<Transaction> all) {
+        Map<CardKey, List<Transaction>> byCard = all.stream()
+                .filter(tx -> tx.getType() == TransactionType.EXPENSE)
+                .filter(tx -> tx.getPaymentMethod() == PaymentMethod.CREDITO)
+                .collect(Collectors.groupingBy(tx -> CardKey.of(tx.getCard())));
+
+        return byCard.entrySet().stream()
+                .map(entry -> new CardTotal(
+                        entry.getKey().id(),
+                        entry.getKey().name(),
+                        entry.getValue().stream().map(Transaction::getAmount).reduce(ZERO, BigDecimal::add),
+                        entry.getValue().size()))
+                .sorted(Comparator.comparing(CardTotal::total).reversed()
+                        .thenComparing(CardTotal::cardName))
+                .toList();
+    }
+
+    // Mesma ideia de CategoryKey: compra no crédito antiga, sem cartão, também vira uma chave.
+    private record CardKey(Long id, String name) {
+
+        static CardKey of(Card card) {
+            return card == null
+                    ? new CardKey(null, CREDIT_WITHOUT_CARD)
+                    : new CardKey(card.getId(), card.getName());
+        }
     }
 
     private record CategoryKey(Long id, String name) {

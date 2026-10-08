@@ -43,12 +43,22 @@ export interface CategoryTotal {
   total: number
 }
 
+// Fatura do cartão no mês: as compras no crédito com aquele cartão. São as
+// MESMAS despesas de expensesByCategory, agrupadas de outro jeito (não somar).
+export interface CardTotal {
+  cardId: number | null // null = compras no crédito antigas, sem cartão
+  cardName: string
+  total: number
+  purchases: number
+}
+
 export interface MonthlySummaryResponse {
   month: string // "2026-10"
   totalIncome: number
   totalExpense: number
   balance: number
   expensesByCategory: CategoryTotal[]
+  expensesByCard: CardTotal[] // da maior fatura para a menor
 }
 
 // Limites de período calculados pelo backend (GET /api/period).

@@ -5,10 +5,10 @@ import {
   addMonths, currentMonth, formatDayHeading, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
   monthOf, todayIso, transactionTitle,
 } from '../format'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Tag, Wallet } from '../icons'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Close, CreditCard, LogOut, Plus, Tag, Wallet } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
 import type {
-  MonthlySummaryResponse, PeriodResponse, TransactionResponse, TransactionType, UserResponse,
+  CardTotal, MonthlySummaryResponse, PeriodResponse, TransactionResponse, TransactionType, UserResponse,
 } from '../types'
 
 interface MonthData {
@@ -263,9 +263,14 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
   const [showAllCategories, setShowAllCategories] = useState(false)
   // Último destaque já revelado (ver abaixo).
   const [revealedId, setRevealedId] = useState<number | null>(null)
+  // Fatura tocada: a lista mostra só as compras daquele cartão (para conferir com o banco).
+  const [cardFilter, setCardFilter] = useState<CardTotal | null>(null)
   const transactionsCard = useRef<HTMLElement>(null)
 
-  const filtered = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
+  const byType = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
+  // cardId null === null: a fatura "Crédito sem cartão" filtra as compras antigas sem cartão.
+  const filtered = cardFilter === null ? byType
+    : byType.filter(tx => tx.paymentMethod === 'CREDITO' && tx.cardId === cardFilter.cardId)
 
   // Transação recém-salva com data antiga pode cair depois do limite: a lista
   // abre até ela, uma vez. Ajustar o estado durante a renderização (e não num
@@ -288,7 +293,19 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
 
   function changeFilter(f: Filter) {
     setTxLimit(TX_PAGE)
+    setCardFilter(null)
     onFilterChange(f)
+  }
+
+  // Tocar na fatura já selecionada desfaz o filtro.
+  function toggleCardFilter(card: CardTotal) {
+    const same = cardFilter !== null && cardFilter.cardId === card.cardId
+    setTxLimit(TX_PAGE)
+    setCardFilter(same ? null : card)
+    onFilterChange('ALL')
+    if (!same) {
+      transactionsCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 
   function showLessTransactions() {
@@ -351,6 +368,34 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
         </section>
       )}
 
+      {summary.expensesByCard.length > 0 && (
+        <section className="card reveal" style={{ animationDelay: '120ms' }}>
+          <h2>Faturas do mês</h2>
+          <ul className="transactions">
+            {summary.expensesByCard.map(card => {
+              const selected = cardFilter !== null && cardFilter.cardId === card.cardId
+              return (
+                <li key={card.cardId ?? 'none'}>
+                  <button type="button" className={selected ? 'tx-row selected' : 'tx-row'}
+                          aria-pressed={selected} onClick={() => toggleCardFilter(card)}>
+                    <span className="tx-icon"><CreditCard /></span>
+                    <div className="tx-main">
+                      <strong>{card.cardName}</strong>
+                      <small>{card.purchases} {card.purchases === 1 ? 'compra' : 'compras'}</small>
+                    </div>
+                    <span className="tx-amount">{formatMoney(card.total)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="hint">
+            As compras já estão nos gastos do mês. Não lance o pagamento da fatura como despesa:
+            ele seria contado duas vezes.
+          </p>
+        </section>
+      )}
+
       <section ref={transactionsCard} className="card reveal" style={{ animationDelay: '160ms' }}>
         <div className="card-head">
           <h2>Transações</h2>
@@ -363,6 +408,14 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
             ))}
           </div>
         </div>
+
+        {cardFilter && (
+          <button type="button" className="filter-chip" onClick={() => setCardFilter(null)}
+                  aria-label={`Remover filtro da fatura ${cardFilter.cardName}`}>
+            Fatura {cardFilter.cardName}
+            <Close />
+          </button>
+        )}
 
         {groups.length === 0 ? (
           <div className="empty">

@@ -1,5 +1,6 @@
 package com.bicavi.report;
 
+import com.bicavi.card.Card;
 import com.bicavi.category.Category;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.period.PeriodPolicy;
@@ -21,6 +22,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -35,6 +37,8 @@ class ReportServiceTest {
     private final Category salary = new Category(USER, "Salário", TransactionType.INCOME);
     private final Category groceries = new Category(USER, "Mercado", TransactionType.EXPENSE);
     private final Category transport = new Category(USER, "Transporte", TransactionType.EXPENSE);
+    private final Card nubank = new Card(USER, "Nubank");
+    private final Card itau = new Card(USER, "Itaú");
 
     @Mock
     private TransactionRepository transactions;
@@ -113,6 +117,57 @@ class ReportServiceTest {
         assertThat(summary.totalExpense()).isEqualTo(new BigDecimal("0.00"));
         assertThat(summary.balance()).isEqualTo(new BigDecimal("0.00"));
         assertThat(summary.expensesByCategory()).isEmpty();
+        assertThat(summary.expensesByCard()).isEmpty();
+    }
+
+    @Test
+    void groupsCreditExpensesByCardFromHighestToLowest() {
+        givenOctoberTransactions(
+                credit(groceries, nubank, "100.00"),
+                credit(transport, nubank, "30.00"),
+                credit(groceries, itau, "50.00"),
+                expense(groceries, "999.00"),       // Pix: não é de cartão
+                income(salary, "5000.00"));
+
+        List<CardTotal> byCard = service.monthlySummary(USER, OCTOBER).expensesByCard();
+
+        assertThat(byCard).extracting(CardTotal::cardName).containsExactly("Nubank", "Itaú");
+        assertThat(byCard).extracting(CardTotal::total)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("130.00"), new BigDecimal("50.00"));
+        assertThat(byCard).extracting(CardTotal::purchases).containsExactly(2L, 1L);
+    }
+
+    // A fatura é outro AGRUPAMENTO das mesmas despesas, não uma despesa a mais:
+    // o biscoito de R$ 8 no crédito aparece na categoria E na fatura, mas o
+    // total do mês continua R$ 8.
+    @Test
+    void cardTotalsDoNotCountExpensesTwice() {
+        givenOctoberTransactions(credit(groceries, nubank, "8.00"));
+
+        MonthlySummaryResponse summary = service.monthlySummary(USER, OCTOBER);
+
+        assertThat(summary.totalExpense()).isEqualByComparingTo("8.00");
+        assertThat(summary.expensesByCategory()).singleElement()
+                .satisfies(c -> assertThat(c.total()).isEqualByComparingTo("8.00"));
+        assertThat(summary.expensesByCard()).singleElement()
+                .satisfies(c -> assertThat(c.total()).isEqualByComparingTo("8.00"));
+    }
+
+    @Test
+    void legacyCreditExpensesWithoutCardAppearAsTheirOwnInvoice() {
+        // Compra no crédito de antes dos cartões: a entidade não deixa CRIAR uma
+        // assim hoje, então simulamos a que vem do banco com um mock.
+        Transaction legacy = mock(Transaction.class);
+        when(legacy.getType()).thenReturn(TransactionType.EXPENSE);
+        when(legacy.getPaymentMethod()).thenReturn(PaymentMethod.CREDITO);
+        when(legacy.getAmount()).thenReturn(new BigDecimal("40.00"));
+        givenOctoberTransactions(legacy, credit(groceries, nubank, "10.00"));
+
+        List<CardTotal> byCard = service.monthlySummary(USER, OCTOBER).expensesByCard();
+
+        assertThat(byCard).extracting(CardTotal::cardName).containsExactly("Crédito sem cartão", "Nubank");
+        assertThat(byCard.get(0).cardId()).isNull();
     }
 
     @Test
@@ -131,6 +186,10 @@ class ReportServiceTest {
 
     private static Transaction income(Category category, String amount) {
         return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, null, null, DAY);
+    }
+
+    private static Transaction credit(Category category, Card card, String amount) {
+        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.CREDITO, card, null, DAY);
     }
 
     private static Transaction expense(Category category, String amount) {

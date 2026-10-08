@@ -9,6 +9,7 @@ public record MonthlySummaryResponse(
         BigDecimal totalIncome,
         BigDecimal totalExpense,
         BigDecimal balance,                     // receitas - despesas (pode ser negativo)
-        List<CategoryTotal> expensesByCategory  // do maior gasto para o menor
+        List<CategoryTotal> expensesByCategory, // do maior gasto para o menor
+        List<CardTotal> expensesByCard          // faturas do mês, da maior para a menor
 ) {
 }
