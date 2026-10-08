@@ -1,0 +1,66 @@
+# Integração contínua: a cada push na develop/master (e em pull requests),
+# o GitHub roda os testes do backend e o lint + build do frontend numa máquina
+# limpa. O resultado aparece como ✅/❌ em cada commit.
+#
+# Por que vale a pena: hoje, o que impede código quebrado de chegar à master
+# é lembrar de rodar os testes. Aqui isso acontece sempre, sozinho, e numa
+# máquina sem nada instalado de antemão (pega o "na minha máquina funciona").
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+
+# Só leitura do repositório: o CI não precisa escrever nada.
+permissions:
+  contents: read
+
+# Dois pushes seguidos na mesma branch: cancela a execução antiga, que já ficou velha.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (testes)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          # Guarda o ~/.m2 entre execuções: não baixa as dependências toda vez.
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      # O runner do GitHub já tem Docker: os testes com Testcontainers sobem
+      # um PostgreSQL 17 descartável, exatamente como na máquina de desenvolvimento.
+      - name: Testes
+        run: ./mvnw -B test
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24' # a mesma do Dockerfile do frontend
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci: instala exatamente o package-lock (o mesmo que o Docker usa).
+      - run: npm ci
+      - run: npm run lint
+      # tsc -b && vite build: falha se houver erro de tipos.
+      - run: npm run build
