@@ -117,17 +117,48 @@ Register-ScheduledTask -TaskName 'Bicavi Backup' -Action $acao -Trigger $quando
 
 ## 8. Atualizar para uma versão nova
 
-Depois que uma mudança for enviada para o GitHub:
+O PC de casa usa **sempre a branch `master`**, que só recebe código já validado.
+O desenvolvimento acontece na branch `develop`; depois de testada, ela é mesclada
+na `master` e enviada para o GitHub. Só então atualize aqui:
 
 ```powershell
 cd C:\bicavi
+git log -1 --oneline   # anote o commit atual: é para ele que você volta se der problema
 powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -Destino "$env:USERPROFILE\OneDrive\Bicavi-backups"
 git pull
 docker compose up -d --build
 ```
 
-O backup antes é por segurança: versões novas podem trazer migrations que alteram
-o banco. Os iPhones recebem a versão nova sozinhos na próxima vez que o app abrir.
+**Sempre faça o backup antes do `git pull`.** Versões novas podem trazer
+*migrations* (arquivos `V*.sql` em `backend/src/main/resources/db/migration`)
+que alteram a estrutura do banco. Voltar o código não desfaz uma migration:
+o que desfaz é restaurar o backup feito **antes** dela rodar.
+
+Os iPhones recebem a versão nova sozinhos na próxima vez que o app abrir.
+
+### Se a versão nova quebrou algo
+
+1. Volte o código para o commit que você anotou:
+
+   ```powershell
+   cd C:\bicavi
+   git checkout <commit-anotado>
+   docker compose up -d --build
+   ```
+
+2. Se o backend não subir (`docker compose logs backend` mostra erro do
+   **Flyway**, como *"applied migration not resolved locally"*), é porque a
+   versão nova já aplicou uma migration que o código antigo não conhece.
+   Restaure o backup feito antes do `pull` (seção 9) e suba de novo.
+   Dados lançados **depois** desse backup se perdem: lance-os de novo.
+
+3. Quando a correção chegar na `master`, volte para ela e atualize normalmente:
+
+   ```powershell
+   git switch master
+   git pull
+   docker compose up -d --build
+   ```
 
 ## 9. Restaurar um backup
 
