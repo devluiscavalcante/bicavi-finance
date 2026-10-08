@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.bicavi.transaction.TestTransactions.expense;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -250,7 +251,7 @@ class TransactionServiceTest {
 
     @Test
     void updateChangesAllFields() {
-        Transaction existing = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, "antigo", DAY);
+        Transaction existing = expense("10").description("antigo").build();
         Category salary = new Category(USER, "Salário", TransactionType.INCOME);
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(existing));
         when(categories.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(salary));
@@ -275,7 +276,7 @@ class TransactionServiceTest {
 
     @Test
     void updateOfTransactionInClosedMonthIsRejected() {
-        Transaction old = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, CLOSED_DAY);
+        Transaction old = expense("10").on(CLOSED_DAY).build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(old));
 
         // Mesmo levando a data para um mês aberto: tirar do mês fechado também é alterá-lo.
@@ -287,7 +288,7 @@ class TransactionServiceTest {
 
     @Test
     void updateMovingTransactionIntoClosedMonthIsRejected() {
-        Transaction current = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY);
+        Transaction current = expense("10").build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(current));
 
         assertThatThrownBy(() -> service.update(USER, 1L,
@@ -298,7 +299,7 @@ class TransactionServiceTest {
 
     @Test
     void deleteInOpenMonthRemovesTransaction() {
-        Transaction current = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY);
+        Transaction current = expense("10").build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(current));
 
         service.delete(USER, 1L, EditScope.THIS);
@@ -308,7 +309,7 @@ class TransactionServiceTest {
 
     @Test
     void deleteInClosedMonthIsRejected() {
-        Transaction old = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, CLOSED_DAY);
+        Transaction old = expense("10").on(CLOSED_DAY).build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(old));
 
         assertThatThrownBy(() -> service.delete(USER, 1L, EditScope.THIS)).isInstanceOf(BusinessRuleException.class);
@@ -320,8 +321,7 @@ class TransactionServiceTest {
     private static final UUID GROUP = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     private static Transaction part(int number, LocalDate date) {
-        return Transaction.installment(USER, null, new BigDecimal("33.33"), PaymentMethod.CREDITO, NUBANK, "PS5", date,
-                GROUP, number, 3);
+        return expense("33.33").credit(NUBANK).description("PS5").on(date).installment(GROUP, number, 3).build();
     }
 
     @Test
@@ -404,7 +404,7 @@ class TransactionServiceTest {
 
     @Test
     void followingScopeOnRegularTransactionActsLikeThis() {
-        Transaction regular = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY);
+        Transaction regular = expense("10").build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(regular));
 
         service.delete(USER, 1L, EditScope.FOLLOWING);
@@ -415,8 +415,7 @@ class TransactionServiceTest {
 
     @Test
     void transactionOlderThanTheConsultationWindowIsNotFound() {
-        Transaction ancient = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null,
-                LocalDate.of(2026, 3, 31));
+        Transaction ancient = expense("10").on(LocalDate.of(2026, 3, 31)).build();
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(ancient));
 
         assertThatThrownBy(() -> service.get(USER, 1L)).isInstanceOf(NotFoundException.class);

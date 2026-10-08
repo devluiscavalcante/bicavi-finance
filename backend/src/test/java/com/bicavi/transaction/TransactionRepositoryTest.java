@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import static com.bicavi.transaction.TestTransactions.expense;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -70,7 +71,7 @@ class TransactionRepositoryTest {
     void savesAndReadsTransactionWithCategory() {
         Category groceries = categories.save(new Category(alice, "Mercado", TransactionType.EXPENSE));
         Long id = transactions.save(
-                new Transaction(alice, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, "Feira", DAY)).getId();
+                expense("35.90").user(alice).category(groceries).description("Feira").build()).getId();
         flushAndClear();
 
         Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
@@ -91,7 +92,7 @@ class TransactionRepositoryTest {
     void storesMoneyExactly() {
         // Em double, 0.1 + 0.2 = 0.30000000000000004. Com BigDecimal + NUMERIC, é exato.
         BigDecimal amount = new BigDecimal("0.1").add(new BigDecimal("0.2"));
-        Long id = transactions.save(new Transaction(alice, null, amount, TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY)).getId();
+        Long id = transactions.save(expense(amount).user(alice).build()).getId();
         flushAndClear();
 
         BigDecimal inDb = jdbc.queryForObject("SELECT amount FROM transactions WHERE id = ?", BigDecimal.class, id);
@@ -136,8 +137,7 @@ class TransactionRepositoryTest {
 
     @Test
     void savesAndReadsPaymentMethodAndCard() {
-        Long id = transactions.save(new Transaction(
-                alice, null, new BigDecimal("30.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, aliceCard, "Caderno", DAY)).getId();
+        Long id = transactions.save(expense("30.00").user(alice).credit(aliceCard).description("Caderno").build()).getId();
         flushAndClear();
 
         // Grava o NOME do enum (EnumType.STRING), não a posição (0, 1, 2...).
@@ -223,8 +223,8 @@ class TransactionRepositoryTest {
         for (int i = 1; i <= 5; i++) {
             Category category = categories.save(new Category(alice, "Categoria " + i, TransactionType.EXPENSE));
             Card card = cards.save(new Card(alice, "Cartão " + i));
-            transactions.save(new Transaction(alice, category, new BigDecimal("10.00"), TransactionType.EXPENSE,
-                    PaymentMethod.CREDITO, card, "gasto " + i, DAY));
+            transactions.save(expense("10.00").user(alice).category(category).credit(card)
+                    .description("gasto " + i).build());
         }
         flushAndClear();
 
@@ -273,11 +273,11 @@ class TransactionRepositoryTest {
         UUID ps5 = UUID.randomUUID();
         UUID tv = UUID.randomUUID();
         for (int n = 1; n <= 3; n++) {
-            transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO, aliceCard,
-                    "PS5", DAY.plusMonths(n - 1), ps5, n, 3));
+            transactions.save(expense("100.00").user(alice).credit(aliceCard).description("PS5")
+                    .on(DAY.plusMonths(n - 1)).installment(ps5, n, 3).build());
         }
-        transactions.save(Transaction.installment(alice, null, new BigDecimal("50.00"), PaymentMethod.CREDITO, aliceCard,
-                "TV", DAY.plusMonths(1), tv, 2, 2));
+        transactions.save(expense("50.00").user(alice).credit(aliceCard).description("TV")
+                .on(DAY.plusMonths(1)).installment(tv, 2, 2).build());
         flushAndClear();
 
         assertThat(transactions.findFollowingInstallments(alice, ps5, 1))
@@ -290,8 +290,8 @@ class TransactionRepositoryTest {
     @Test
     void savesInstallmentColumnsAsUuidAndIntegers() {
         UUID group = UUID.randomUUID();
-        Long id = transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO, aliceCard,
-                "PS5", DAY, group, 2, 3)).getId();
+        Long id = transactions.save(expense("100.00").user(alice).credit(aliceCard).description("PS5")
+                .installment(group, 2, 3).build()).getId();
         flushAndClear();
 
         Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
@@ -327,8 +327,7 @@ class TransactionRepositoryTest {
     }
 
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
-        return transactions.save(new Transaction(
-                userId, category, new BigDecimal("10.00"), TransactionType.EXPENSE, PaymentMethod.PIX, null, description, day)).getId();
+        return transactions.save(expense("10.00").user(userId).category(category).description(description).on(day).build()).getId();
     }
 
     // flush: envia ao banco os comandos SQL pendentes.

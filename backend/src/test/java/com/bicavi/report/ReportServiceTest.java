@@ -6,6 +6,7 @@ import com.bicavi.common.BusinessRuleException;
 import com.bicavi.period.PeriodPolicy;
 import com.bicavi.period.TestClocks;
 import com.bicavi.transaction.PaymentMethod;
+import com.bicavi.transaction.TestTransactions;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
 import com.bicavi.transaction.TransactionType;
@@ -185,14 +186,14 @@ class ReportServiceTest {
     }
 
     private static Transaction income(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.INCOME, null, null, null, DAY);
+        return TestTransactions.income(amount).category(category).build();
     }
 
     private static Transaction credit(Category category, Card card, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.CREDITO, card, null, DAY);
+        return TestTransactions.expense(amount).category(category).credit(card).build();
     }
 
     private static Transaction expense(Category category, String amount) {
-        return new Transaction(USER, category, new BigDecimal(amount), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, DAY);
+        return TestTransactions.expense(amount).category(category).build();
     }
 }

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static com.bicavi.transaction.TestTransactions.expense;
+import static com.bicavi.transaction.TestTransactions.income;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -19,7 +21,7 @@ class TransactionTest {
 
     @Test
     void createsValidTransaction() {
-        Transaction tx = new Transaction(USER, groceries, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, "Feira", TODAY);
+        Transaction tx = expense("35.90").category(groceries).description("Feira").build();
 
         assertThat(tx.getAmount()).isEqualByComparingTo("35.90");
         assertThat(tx.getCreatedAt()).isNotNull();
@@ -27,22 +29,22 @@ class TransactionTest {
 
     @Test
     void allowsTransactionWithoutCategory() {
-        Transaction tx = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY);
+        Transaction tx = expense("10").build();
 
         assertThat(tx.getCategory()).isNull();
     }
 
     @Test
     void rejectsZeroOrNegativeAmount() {
-        assertThatThrownBy(() -> new Transaction(USER, groceries, BigDecimal.ZERO, TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY))
+        assertThatThrownBy(() -> expense(BigDecimal.ZERO).category(groceries).build())
                 .isInstanceOf(BusinessRuleException.class);
-        assertThatThrownBy(() -> new Transaction(USER, groceries, new BigDecimal("-5"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY))
+        assertThatThrownBy(() -> expense("-5").category(groceries).build())
                 .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
     void rejectsMoreThanTwoDecimalPlaces() {
-        assertThatThrownBy(() -> new Transaction(USER, groceries, new BigDecimal("10.555"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY))
+        assertThatThrownBy(() -> expense("10.555").category(groceries).build())
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("2 casas decimais");
     }
@@ -53,34 +55,34 @@ class TransactionTest {
 
         // IllegalStateException (bug nosso), não BusinessRuleException (erro do cliente):
         // o service nunca deveria chegar a passar uma categoria alheia.
-        assertThatThrownBy(() -> new Transaction(USER, someoneElses, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY))
+        assertThatThrownBy(() -> expense("10").category(someoneElses).build())
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void rejectsExpenseWithoutPaymentMethod() {
-        assertThatThrownBy(() -> new Transaction(USER, groceries, new BigDecimal("10"), TransactionType.EXPENSE, null, null, null, TODAY))
+        assertThatThrownBy(() -> expense("10").category(groceries).payment(null).build())
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("forma de pagamento");
     }
 
     @Test
     void allowsIncomeWithoutPaymentMethod() {
-        Transaction tx = new Transaction(USER, null, new BigDecimal("5000"), TransactionType.INCOME, null, null, "Salário", TODAY);
+        Transaction tx = income("5000").description("Salário").build();
 
         assertThat(tx.getPaymentMethod()).isNull();
     }
 
     @Test
     void rejectsIncomeWithPaymentMethod() {
-        assertThatThrownBy(() -> new Transaction(USER, null, new BigDecimal("5000"), TransactionType.INCOME, PaymentMethod.PIX, null, null, TODAY))
+        assertThatThrownBy(() -> income("5000").payment(PaymentMethod.PIX).build())
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Receitas");
     }
 
     @Test
     void updateAppliesPaymentMethodRuleToo() {
-        Transaction tx = new Transaction(USER, null, new BigDecimal("10"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY);
+        Transaction tx = expense("10").build();
 
         assertThatThrownBy(() -> tx.update(null, new BigDecimal("10"), TransactionType.EXPENSE, null, null, null, TODAY))
                 .isInstanceOf(BusinessRuleException.class);
@@ -88,7 +90,7 @@ class TransactionTest {
 
     @Test
     void rejectsTypeDifferentFromCategoryType() {
-        assertThatThrownBy(() -> new Transaction(USER, groceries, new BigDecimal("10"), TransactionType.INCOME, null, null, null, TODAY))
+        assertThatThrownBy(() -> income("10").category(groceries).build())
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Mercado");
     }
