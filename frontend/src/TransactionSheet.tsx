@@ -57,11 +57,12 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  const canSplit = !editing && type === 'EXPENSE'
+  const isCredit = type === 'EXPENSE' && paymentMethod === 'CREDITO'
+  // Parcelar só no crédito (Pix, dinheiro, débito e boleto são à vista), e só ao criar.
+  const canSplit = !editing && isCredit
   const split = canSplit && installments > 1
   const previewAmount = parseAmount(amountText)
   const applyToFollowing = isInstallment && scope === 'FOLLOWING'
-  const isCredit = type === 'EXPENSE' && paymentMethod === 'CREDITO'
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -81,12 +82,14 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
       .catch(() => setCards([]))
   }, [])
 
-  // Cartão só existe no crédito: trocar a forma de pagamento limpa a escolha.
-  // Com um único cartão cadastrado, o crédito já vem com ele selecionado.
+  // Cartão e parcelas só existem no crédito: sair dele limpa os dois (senão o
+  // "3x" escolhido antes iria junto num Pix). Com um único cartão cadastrado,
+  // o crédito já vem com ele selecionado.
   function changePaymentMethod(next: PaymentMethod) {
     setPaymentMethod(next)
     if (next !== 'CREDITO') {
       setCardId('')
+      setInstallments(1)
     } else if (cardId === '' && cards?.length === 1) {
       setCardId(String(cards[0].id))
     }

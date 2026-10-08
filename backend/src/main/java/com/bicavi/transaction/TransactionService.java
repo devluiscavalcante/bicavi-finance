@@ -70,6 +70,10 @@ public class TransactionService {
     @Transactional
     public List<TransactionResponse> createInstallments(Long userId, InstallmentRequest request) {
         int count = request.installments();
+        // Parcelar é coisa do cartão de crédito: Pix, dinheiro, débito e boleto são à vista.
+        if (request.paymentMethod() != PaymentMethod.CREDITO) {
+            throw new BusinessRuleException("Só é possível parcelar compras no crédito");
+        }
         // Só a 1ª precisa ser checada: as demais caem em meses posteriores, que nunca estão fechados.
         period.checkEditable(request.firstDate());
         if (request.totalAmount().compareTo(MIN_INSTALLMENT.multiply(BigDecimal.valueOf(count))) < 0) {

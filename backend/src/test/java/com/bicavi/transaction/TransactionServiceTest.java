@@ -235,12 +235,16 @@ class TransactionServiceTest {
     }
 
     @Test
-    void installmentsWithoutPaymentMethodAreRejectedByTheEntity() {
-        // A regra "despesa exige forma de pagamento" vem da entidade, como no create.
-        assertThatThrownBy(() -> service.createInstallments(USER, new InstallmentRequest(
-                new BigDecimal("300"), 3, null, null, null, null, DAY)))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("forma de pagamento");
+    void installmentsOnlyOnCredit() {
+        // Sem forma de pagamento ou em qualquer forma que não seja crédito: recusado
+        // antes de buscar categoria/cartão ou gravar qualquer parcela.
+        for (PaymentMethod method : new PaymentMethod[]{null, PaymentMethod.PIX, PaymentMethod.DINHEIRO,
+                PaymentMethod.DEBITO, PaymentMethod.BOLETO}) {
+            assertThatThrownBy(() -> service.createInstallments(USER, new InstallmentRequest(
+                    new BigDecimal("300"), 3, method, null, null, null, DAY)))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("Só é possível parcelar compras no crédito");
+        }
         verify(transactions, never()).saveAll(any());
     }
 
