@@ -7,8 +7,10 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # 127.0.0.1: só este computador acessa o banco. Sem o IP, o Docker abre a
+    # porta em todas as interfaces, e qualquer um na mesma rede tentaria conectar.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
