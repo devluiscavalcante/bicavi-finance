@@ -101,6 +101,11 @@ public class Transaction {
                        PaymentMethod paymentMethod, Card card, String description, LocalDate occurredOn) {
         this.userId = userId;
         apply(category, amount, type, paymentMethod, card, description, occurredOn);
+        // Exceção consciente à regra do ClockConfig ("use o Clock, não Instant.now()"):
+        // createdAt é só registro de auditoria, nenhuma regra ou teste depende dele.
+        // Usar o Clock exigiria recebê-lo no construtor da entidade, em todo lugar
+        // que a cria, sem ganho prático. Se um dia uma regra depender deste horário,
+        // aí sim ele deve vir do Clock.
         this.createdAt = Instant.now();
     }
 
