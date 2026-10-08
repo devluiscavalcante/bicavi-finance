@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState, type TouchEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
-import {
-  addMonths, currentMonth, formatDayHeading, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
-  monthOf, todayIso, transactionTitle,
-} from '../format'
-import { groupByDay } from '../lists'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Close, CreditCard, LogOut, Plus, Tag, Wallet } from '../icons'
+import { addMonths, currentMonth, formatMonth, isValidMonth, monthOf, todayIso } from '../format'
+import { ChevronLeft, ChevronRight, LogOut, Plus, Tag } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
-import type {
-  CardTotal, MonthlySummaryResponse, PeriodResponse, TransactionResponse, TransactionType, UserResponse,
-} from '../types'
+import type { CardTotal, MonthlySummaryResponse, PeriodResponse, TransactionResponse, UserResponse } from '../types'
+import { CategoryBreakdown } from './month/CategoryBreakdown'
+import { InvoicesCard } from './month/InvoicesCard'
+import { MonthHero } from './month/MonthHero'
+import { TransactionList, type Filter } from './month/TransactionList'
 
 interface MonthData {
   summary: MonthlySummaryResponse
@@ -22,8 +20,6 @@ type MonthResult = { month: string } & ({ data: MonthData } | { error: string })
 
 // Painel fechado, aberto para criar, ou aberto editando uma transação.
 type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
-
-type Filter = 'ALL' | TransactionType
 
 // Gesto de arrastar: distância mínima, quanto mais horizontal que vertical
 // (para não confundir com a rolagem da página) e duração máxima.
@@ -224,17 +220,9 @@ function MonthSkeleton() {
   )
 }
 
-// Quantas transações aparecem de início (e a mais a cada "Ver mais"),
-// e quantas categorias aparecem antes do "Ver todas".
-const TX_PAGE = 5
-const CATEGORY_PAGE = 3
-
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: 'ALL', label: 'Todas' },
-  { value: 'EXPENSE', label: 'Despesas' },
-  { value: 'INCOME', label: 'Receitas' },
-]
-
+// Conteúdo do mês já carregado. Coordena o que é compartilhado entre os blocos:
+// a fatura escolhida aparece selecionada nas faturas E filtra a lista.
+// Cada bloco cuida do próprio estado ("Ver todas", "Ver mais").
 function MonthContent({ data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect }: {
   data: MonthData
   highlightId: number | null
@@ -243,42 +231,12 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
   onFilterChange: (f: Filter) => void
   onSelect: (tx: TransactionResponse) => void
 }) {
-  // Quantas transações e categorias aparecem. Não precisa zerar ao trocar de mês:
-  // o pai recria este componente a cada mês (key={month}).
-  const [txLimit, setTxLimit] = useState(TX_PAGE)
-  const [showAllCategories, setShowAllCategories] = useState(false)
-  // Último destaque já revelado (ver abaixo).
-  const [revealedId, setRevealedId] = useState<number | null>(null)
   // Fatura tocada: a lista mostra só as compras daquele cartão (para conferir com o banco).
   const [cardFilter, setCardFilter] = useState<CardTotal | null>(null)
-  const transactionsCard = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLElement>(null)
 
-  const byType = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
-  // cardId null === null: a fatura "Crédito sem cartão" filtra as compras antigas sem cartão.
-  const filtered = cardFilter === null ? byType
-    : byType.filter(tx => tx.paymentMethod === 'CREDITO' && tx.cardId === cardFilter.cardId)
-
-  // Transação recém-salva com data antiga pode cair depois do limite: a lista
-  // abre até ela, uma vez. Ajustar o estado durante a renderização (e não num
-  // useEffect) evita desenhar a tela com ela escondida e logo depois redesenhar.
-  // Só age quando ela já está na lista: a resposta da API chega depois do destaque.
-  const highlightIndex = filtered.findIndex(tx => tx.id === highlightId)
-  if (highlightId !== revealedId && highlightIndex !== -1) {
-    setRevealedId(highlightId)
-    if (highlightIndex >= txLimit) {
-      setTxLimit(Math.ceil((highlightIndex + 1) / TX_PAGE) * TX_PAGE)
-    }
-  }
-
-  // Corta ANTES de agrupar por dia: os títulos de dia continuam corretos.
-  const groups = groupByDay(filtered.slice(0, txLimit))
-  const hiddenCount = Math.max(filtered.length - txLimit, 0)
-
-  const categories = summary.expensesByCategory
-  const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_PAGE)
-
+  // Trocar o filtro de tipo desfaz o filtro de fatura.
   function changeFilter(f: Filter) {
-    setTxLimit(TX_PAGE)
     setCardFilter(null)
     onFilterChange(f)
   }
@@ -286,192 +244,29 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
   // Tocar na fatura já selecionada desfaz o filtro.
   function toggleCardFilter(card: CardTotal) {
     const same = cardFilter !== null && cardFilter.cardId === card.cardId
-    setTxLimit(TX_PAGE)
     setCardFilter(same ? null : card)
     onFilterChange('ALL')
     if (!same) {
-      transactionsCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 
-  function showLessTransactions() {
-    setTxLimit(TX_PAGE)
-    // A lista encolhe: sem isso, quem estava no fim ficaria olhando para o vazio.
-    transactionsCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  let rowIndex = 0 // para a entrada em cascata atravessar os grupos
-
   return (
     <>
-      <section className="hero reveal">
-        <div>
-          <small>Saldo do mês</small>
-          <p className="hero-balance">{formatMoney(summary.balance)}</p>
-        </div>
-        <div className="hero-row">
-          <div className="hero-stat">
-            <ArrowUp />
-            <div>
-              <small>Receitas</small>
-              <strong>{formatMoney(summary.totalIncome)}</strong>
-            </div>
-          </div>
-          <div className="hero-stat">
-            <ArrowDown />
-            <div>
-              <small>Despesas</small>
-              <strong>{formatMoney(summary.totalExpense)}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {categories.length > 0 && (
-        <section className="card reveal" style={{ animationDelay: '80ms' }}>
-          <h2>Gastos por categoria</h2>
-          <ul className="categories">
-            {/* Já vêm do backend ordenadas pelo total: as primeiras são as maiores. */}
-            {visibleCategories.map(c => (
-              // categoryId null ("Sem categoria") aparece no máximo uma vez.
-              <li key={c.categoryId ?? 'none'}>
-                <div className="category-head">
-                  <span>{c.categoryName ?? 'Sem categoria'}</span>
-                  <strong>{formatMoney(c.total)}</strong>
-                </div>
-                <div className="bar">
-                  {/* Proporção só para a largura da barra; nenhum valor exibido vem daqui. */}
-                  <span style={{ width: `${(c.total / summary.totalExpense) * 100}%` }} />
-                </div>
-              </li>
-            ))}
-          </ul>
-          {categories.length > CATEGORY_PAGE && (
-            <button type="button" className="more-btn" onClick={() => setShowAllCategories(v => !v)}>
-              {showAllCategories ? 'Ver menos' : `Ver todas (${categories.length})`}
-            </button>
-          )}
-        </section>
-      )}
-
-      {summary.expensesByCard.length > 0 && (
-        <section className="card reveal" style={{ animationDelay: '120ms' }}>
-          <h2>Faturas do mês</h2>
-          <ul className="transactions">
-            {summary.expensesByCard.map(card => {
-              const selected = cardFilter !== null && cardFilter.cardId === card.cardId
-              return (
-                <li key={card.cardId ?? 'none'}>
-                  <button type="button" className={selected ? 'tx-row selected' : 'tx-row'}
-                          aria-pressed={selected} onClick={() => toggleCardFilter(card)}>
-                    <span className="tx-icon"><CreditCard /></span>
-                    <div className="tx-main">
-                      <strong>{card.cardName}</strong>
-                      <small>{card.purchases} {card.purchases === 1 ? 'compra' : 'compras'}</small>
-                    </div>
-                    <span className="tx-amount">{formatMoney(card.total)}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <p className="hint">
-            As compras já estão nos gastos do mês. Não lance o pagamento da fatura como despesa:
-            ele seria contado duas vezes.
-          </p>
-        </section>
-      )}
-
-      <section ref={transactionsCard} className="card reveal" style={{ animationDelay: '160ms' }}>
-        <div className="card-head">
-          <h2>Transações</h2>
-          <div className="segmented small" role="tablist" aria-label="Filtrar transações">
-            {FILTERS.map(f => (
-              <button key={f.value} type="button" role="tab" aria-selected={filter === f.value}
-                      className={filter === f.value ? 'active' : ''} onClick={() => changeFilter(f.value)}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {cardFilter && (
-          <button type="button" className="filter-chip" onClick={() => setCardFilter(null)}
-                  aria-label={`Remover filtro da fatura ${cardFilter.cardName}`}>
-            Fatura {cardFilter.cardName}
-            <Close />
-          </button>
-        )}
-
-        {groups.length === 0 ? (
-          <div className="empty">
-            <Wallet />
-            <p>
-              {transactions.length === 0
-                ? 'Nenhuma transação neste mês.'
-                : filter === 'EXPENSE' ? 'Nenhuma despesa neste mês.' : 'Nenhuma receita neste mês.'}
-            </p>
-            {editable && transactions.length === 0 && <small>Toque no + para adicionar.</small>}
-          </div>
-        ) : (
-          groups.map(group => (
-            <div key={group.date} className="day-group">
-              <h3 className="day-heading">{formatDayHeading(group.date)}</h3>
-              <ul className="transactions">
-                {group.items.map(tx => {
-                  const kind = tx.type === 'INCOME' ? 'income' : 'expense'
-                  // Linhas entram em cascata. As que chegam pelo "Ver mais" recomeçam a
-                  // cascata do zero, sem esperar as linhas que já estavam na tela.
-                  const index = rowIndex++
-                  const delay = index < TX_PAGE ? 200 + index * 40 : (index % TX_PAGE) * 40
-                  const content = (
-                    <>
-                      <span className={`tx-icon ${kind}`}>
-                        {tx.type === 'INCOME' ? <ArrowUp /> : <ArrowDown />}
-                      </span>
-                      <div className="tx-main">
-                        <strong>{transactionTitle(tx)}</strong>
-                        <small>
-                          {tx.categoryName ?? 'Sem categoria'}
-                          {tx.paymentMethod && ` · ${formatPaymentMethod(tx.paymentMethod)}`}
-                          {tx.cardName && ` · ${tx.cardName}`}
-                        </small>
-                      </div>
-                      <span className={`tx-amount ${kind}`}>
-                        {tx.type === 'INCOME' ? '+' : '−'} {formatMoney(tx.amount)}
-                      </span>
-                    </>
-                  )
-                  return (
-                    <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
-                        style={{ animationDelay: `${delay}ms` }}>
-                      {/* Mês aberto: a linha é um <button> (teclado e leitor de tela funcionam).
-                          Mês fechado: só texto, nada para clicar. */}
-                      {editable ? (
-                        <button type="button" className="tx-row" onClick={() => onSelect(tx)}>
-                          {content}
-                        </button>
-                      ) : (
-                        <div className="tx-row">{content}</div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          ))
-        )}
-
-        {hiddenCount > 0 ? (
-          <button type="button" className="more-btn" onClick={() => setTxLimit(l => l + TX_PAGE)}>
-            Ver mais ({hiddenCount} {hiddenCount === 1 ? 'restante' : 'restantes'})
-          </button>
-        ) : txLimit > TX_PAGE && filtered.length > TX_PAGE && (
-          <button type="button" className="more-btn" onClick={showLessTransactions}>
-            Ver menos
-          </button>
-        )}
-      </section>
+      <MonthHero summary={summary} />
+      <CategoryBreakdown categories={summary.expensesByCategory} totalExpense={summary.totalExpense} />
+      <InvoicesCard invoices={summary.expensesByCard} selected={cardFilter} onToggle={toggleCardFilter} />
+      <TransactionList
+        transactions={transactions}
+        filter={filter}
+        onFilterChange={changeFilter}
+        cardFilter={cardFilter}
+        onClearCardFilter={() => setCardFilter(null)}
+        highlightId={highlightId}
+        editable={editable}
+        onSelect={onSelect}
+        sectionRef={listRef}
+      />
     </>
   )
 }
