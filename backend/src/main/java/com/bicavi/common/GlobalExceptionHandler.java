@@ -1,11 +1,14 @@
 package com.bicavi.common;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +22,8 @@ import java.util.Map;
 // Assim os controllers não precisam de try/catch.
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(NotFoundException.class)
     public ProblemDetail handleNotFound(NotFoundException ex) {
@@ -86,5 +91,27 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Dados inválidos");
         problem.setProperty("errors", errors);
         return problem;
+    }
+
+    // Rede de segurança para o que nenhum handler acima tratou.
+    //
+    // Exceções do próprio Spring (rota inexistente = 404, método errado = 405,
+    // tipo de conteúdo não suportado = 415...) implementam ErrorResponse e já
+    // sabem o status certo: devolvemos o que elas dizem, no formato ProblemDetail.
+    //
+    // O resto é bug nosso (NullPointerException etc.): 500 com mensagem genérica.
+    // O detalhe vai para o LOG, nunca para a resposta: stack trace e mensagens
+    // internas ajudariam um atacante e não ajudam o usuário.
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex) {
+        if (ex instanceof ErrorResponse spring) {
+            return ResponseEntity.status(spring.getStatusCode())
+                    .headers(spring.getHeaders())  // ex.: o header Allow do 405
+                    .body(spring.getBody());
+        }
+        log.error("Erro inesperado", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Erro inesperado no servidor. Tente novamente."));
     }
 }
