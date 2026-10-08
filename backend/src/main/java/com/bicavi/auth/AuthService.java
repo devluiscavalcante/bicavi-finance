@@ -29,14 +29,17 @@ public class AuthService {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final LoginRateLimiter loginRateLimiter;
 
     // Hash de uma senha qualquer, usado quando o e-mail não existe (ver login).
     private final String dummyHash;
 
-    public AuthService(UserRepository users, PasswordEncoder passwordEncoder, TokenService tokenService) {
+    public AuthService(UserRepository users, PasswordEncoder passwordEncoder, TokenService tokenService,
+                       LoginRateLimiter loginRateLimiter) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
+        this.loginRateLimiter = loginRateLimiter;
         this.dummyHash = passwordEncoder.encode("senha-ficticia-para-equalizar-tempo");
     }
 
@@ -57,7 +60,12 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
-        Optional<User> user = users.findByEmail(normalizeEmail(request.email()));
+        String email = normalizeEmail(request.email());
+        // Antes de tudo: com o limite estourado, nem consulta o banco nem roda o BCrypt.
+        // Vale igual para e-mail existente ou não, então o 429 não revela quem tem conta.
+        loginRateLimiter.tryConsume(email);
+
+        Optional<User> user = users.findByEmail(email);
 
         if (user.isEmpty()) {
             // Roda o BCrypt mesmo assim, para a resposta demorar o mesmo tempo

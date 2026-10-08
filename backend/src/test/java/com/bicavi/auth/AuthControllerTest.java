@@ -1,6 +1,7 @@
 package com.bicavi.auth;
 
 import com.bicavi.common.ConflictException;
+import com.bicavi.common.TooManyRequestsException;
 import com.bicavi.common.UnauthorizedException;
 import com.bicavi.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -11,12 +12,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,6 +88,22 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("E-mail ou senha incorretos"));
+    }
+
+    @Test
+    void loginOverTheLimitReturns429WithRetryAfter() throws Exception {
+        when(service.login(any())).thenThrow(new TooManyRequestsException(
+                "Muitas tentativas de login. Tente novamente em 3 minutos.", Duration.ofSeconds(179, 400_000_000)));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "luis@example.com", "password": "errada"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                // 179,4 s arredondado para cima: o cliente nunca tenta antes da hora.
+                .andExpect(header().string("Retry-After", "180"))
+                .andExpect(jsonPath("$.detail").value("Muitas tentativas de login. Tente novamente em 3 minutos."));
     }
 
     @Test

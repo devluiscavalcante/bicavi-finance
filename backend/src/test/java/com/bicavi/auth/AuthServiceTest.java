@@ -2,6 +2,7 @@ package com.bicavi.auth;
 
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.common.ConflictException;
+import com.bicavi.common.TooManyRequestsException;
 import com.bicavi.common.UnauthorizedException;
 import com.bicavi.security.TokenService;
 import com.bicavi.user.User;
@@ -24,9 +25,11 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +41,11 @@ class AuthServiceTest {
     @Mock
     private TokenService tokenService;
 
+    // Mock: por padrão não faz nada (libera todas as tentativas).
+    // O comportamento real do limite é testado em LoginRateLimiterTest.
+    @Mock
+    private LoginRateLimiter loginRateLimiter;
+
     // BCrypt de verdade, para os testes mostrarem como ele se comporta.
     // spy = objeto real, mas que o Mockito consegue "espionar" com verify().
     private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder());
@@ -46,7 +54,28 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(users, passwordEncoder, tokenService);
+        service = new AuthService(users, passwordEncoder, tokenService, loginRateLimiter);
+    }
+
+    @Test
+    void loginCountsAttemptUsingNormalizedEmail() {
+        when(users.findByEmail("luis@example.com")).thenReturn(Optional.empty());
+
+        catchThrowable(() -> service.login(new LoginRequest(" LUIS@Example.com ", "errada")));
+
+        // " LUIS@Example.com " e "luis@example.com" gastam o MESMO balde.
+        verify(loginRateLimiter).tryConsume("luis@example.com");
+    }
+
+    @Test
+    void loginOverTheLimitSkipsDatabaseAndBcrypt() {
+        doThrow(new TooManyRequestsException("Muitas tentativas", Duration.ofMinutes(3)))
+                .when(loginRateLimiter).tryConsume("luis@example.com");
+
+        assertThatThrownBy(() -> service.login(new LoginRequest("luis@example.com", "senha-forte-123")))
+                .isInstanceOf(TooManyRequestsException.class);
+        verifyNoInteractions(users, tokenService);
+        verify(passwordEncoder, never()).matches(any(), any());
     }
 
     @Test
