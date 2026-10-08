@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 // Regra: o código da aplicação só usa métodos que recebem userId
 // (findById e findAll, herdados do JpaRepository, NÃO devem ser usados nos services).
@@ -30,4 +31,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             ORDER BY t.occurredOn DESC, t.id DESC
             """)
     List<Transaction> findInPeriod(Long userId, LocalDate start, LocalDate end, Long categoryId);
+
+    // Parcelas da mesma compra DEPOIS da indicada (para "esta e as próximas").
+    // userId no filtro, como em toda consulta: grupo de outro usuário não aparece.
+    @Query("""
+            SELECT t FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.installmentGroup = :group
+              AND t.installmentNumber > :number
+            ORDER BY t.installmentNumber
+            """)
+    List<Transaction> findFollowingInstallments(Long userId, UUID group, Integer number);
 }

@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 // Todo método recebe o userId do usuário logado (vindo do token, nunca do cliente).
 // Regras de período (meses fechados e janela de consulta): ver PeriodPolicy.
@@ -71,50 +72,75 @@ public class TransactionService {
         }
 
         Category category = findCategory(userId, request.categoryId());
+        // A descrição é a mesma em todas ("PS5"); o "(1/3)" vem de installmentNumber/Count.
         String description = normalize(request.description());
         List<BigDecimal> amounts = Installments.split(request.totalAmount(), count);
+        // Identificador da compra, comum a todas as parcelas.
+        UUID group = UUID.randomUUID();
 
         List<Transaction> parts = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            String label = "(" + (i + 1) + "/" + count + ")";
-            parts.add(new Transaction(
+            parts.add(Transaction.installment(
                     userId,
                     category,
                     amounts.get(i),
-                    TransactionType.EXPENSE,
                     request.paymentMethod(),
-                    description == null ? "Parcela " + label : description + " " + label,
+                    description,
                     // Sempre a partir da 1ª data (e não "mês anterior + 1"): 31/01 vira
                     // 28/02 e depois volta a 31/03, sem ficar preso no dia 28.
-                    request.firstDate().plusMonths(i)));
+                    request.firstDate().plusMonths(i),
+                    group,
+                    i + 1,
+                    count));
         }
         return transactions.saveAll(parts).stream()
                 .map(TransactionResponse::from)
                 .toList();
     }
 
+    // scope = FOLLOWING numa parcela: categoria, forma de pagamento e descrição
+    // valem também para as parcelas SEGUINTES. Valor e data mudam só nesta
+    // (mudar o valor de todas mudaria o total da compra).
     @Transactional
-    public TransactionResponse update(Long userId, Long id, TransactionRequest request) {
+    public TransactionResponse update(Long userId, Long id, TransactionRequest request, EditScope scope) {
         Transaction tx = findOrThrow(userId, id);
         // As duas datas: não dá para tirar uma transação de um mês fechado
         // nem colocar uma dentro dele.
         period.checkEditable(tx.getOccurredOn());
         period.checkEditable(request.occurredOn());
-        tx.update(
-                findCategory(userId, request.categoryId()),
-                request.amount(),
-                request.type(),
-                request.paymentMethod(),
-                normalize(request.description()),
+
+        Category category = findCategory(userId, request.categoryId());
+        String description = normalize(request.description());
+        tx.update(category, request.amount(), request.type(), request.paymentMethod(), description,
                 request.occurredOn());
+
+        for (Transaction next : followingInstallments(userId, tx, scope)) {
+            // Mantém valor, tipo e data da própria parcela; as regras de validação são as mesmas.
+            next.update(category, next.getAmount(), next.getType(), request.paymentMethod(), description,
+                    next.getOccurredOn());
+        }
         return TransactionResponse.from(tx);
     }
 
     @Transactional
-    public void delete(Long userId, Long id) {
+    public void delete(Long userId, Long id, EditScope scope) {
         Transaction tx = findOrThrow(userId, id);
         period.checkEditable(tx.getOccurredOn());
+        List<Transaction> following = followingInstallments(userId, tx, scope);
         transactions.delete(tx);
+        transactions.deleteAll(following);
+    }
+
+    // As parcelas depois desta, se for o caso. Ficam sempre em meses posteriores,
+    // logo abertos (a checagem é só defesa: se falhar, nada é gravado).
+    private List<Transaction> followingInstallments(Long userId, Transaction tx, EditScope scope) {
+        if (scope != EditScope.FOLLOWING || !tx.isInstallment()) {
+            return List.of();
+        }
+        List<Transaction> following = transactions.findFollowingInstallments(
+                userId, tx.getInstallmentGroup(), tx.getInstallmentNumber());
+        following.forEach(next -> period.checkEditable(next.getOccurredOn()));
+        return following;
     }
 
     // Fora da janela de consulta conta como inexistente, igual à de outro usuário.

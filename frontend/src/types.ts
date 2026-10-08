@@ -28,7 +28,12 @@ export interface TransactionResponse {
   categoryName: string | null
   description: string | null
   occurredOn: string // "2026-10-07"
+  installmentNumber: number | null // parcela 2 de 3 -> 2; null se não for parcela
+  installmentCount: number | null // parcela 2 de 3 -> 3
 }
+
+// Alcance de edição/exclusão de uma parcela (?scope=...).
+export type EditScope = 'THIS' | 'FOLLOWING'
 
 export interface CategoryTotal {
   categoryId: number | null // null = "Sem categoria"

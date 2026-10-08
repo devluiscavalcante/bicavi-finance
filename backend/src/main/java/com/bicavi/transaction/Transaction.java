@@ -17,6 +17,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 // Transação FINANCEIRA (receita/despesa). Não confundir com transação de
 // banco de dados (@Transactional), que é outro conceito.
@@ -59,7 +60,34 @@ public class Transaction {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // Parcela de uma compra parcelada (null nas três = transação comum).
+    // Definidos na criação e nunca alterados: a parcela 2/3 é sempre a 2/3.
+    @Column(name = "installment_group", updatable = false)
+    private UUID installmentGroup;
+
+    @Column(name = "installment_number", updatable = false)
+    private Integer installmentNumber;
+
+    @Column(name = "installment_count", updatable = false)
+    private Integer installmentCount;
+
     protected Transaction() {
+    }
+
+    // Parcela "number" de "count" de uma compra. Sempre despesa.
+    public static Transaction installment(Long userId, Category category, BigDecimal amount,
+                                          PaymentMethod paymentMethod, String description, LocalDate occurredOn,
+                                          UUID group, int number, int count) {
+        Transaction tx = new Transaction(userId, category, amount, TransactionType.EXPENSE,
+                paymentMethod, description, occurredOn);
+        tx.installmentGroup = group;
+        tx.installmentNumber = number;
+        tx.installmentCount = count;
+        return tx;
+    }
+
+    public boolean isInstallment() {
+        return installmentGroup != null;
     }
 
     public Transaction(Long userId, Category category, BigDecimal amount, TransactionType type,
@@ -79,6 +107,10 @@ public class Transaction {
     private void apply(Category category, BigDecimal amount, TransactionType type,
                        PaymentMethod paymentMethod, String description, LocalDate occurredOn) {
         validate(category, amount, type, paymentMethod, occurredOn);
+        // Parcela é despesa de uma compra: virar receita não faz sentido.
+        if (installmentGroup != null && type != TransactionType.EXPENSE) {
+            throw new BusinessRuleException("Parcelas de uma compra são sempre despesas");
+        }
         // Defesa extra: o service só deveria passar categorias do próprio usuário.
         // Se isto disparar, é BUG nosso (500), não erro do cliente (400).
         if (category != null && !category.getUserId().equals(userId)) {
@@ -153,5 +185,17 @@ public class Transaction {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getInstallmentGroup() {
+        return installmentGroup;
+    }
+
+    public Integer getInstallmentNumber() {
+        return installmentNumber;
+    }
+
+    public Integer getInstallmentCount() {
+        return installmentCount;
     }
 }

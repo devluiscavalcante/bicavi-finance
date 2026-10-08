@@ -4,8 +4,8 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { formatPaymentMethod, installmentPreview, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
 import type {
-  CategoryResponse, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest, TransactionResponse,
-  TransactionType,
+  CategoryResponse, EditScope, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest,
+  TransactionResponse, TransactionType,
 } from './types'
 
 // 1x (à vista) até 24x, o mesmo limite do backend (@Min(2) @Max(24) no parcelado).
@@ -27,6 +27,11 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const editing = transaction !== undefined
+  // Parcela de uma compra: sempre despesa, e a edição pode valer para as seguintes.
+  const installmentNumber = transaction?.installmentNumber ?? null
+  const installmentCount = transaction?.installmentCount ?? null
+  const isInstallment = installmentNumber !== null && installmentCount !== null
+  const followingCount = isInstallment ? installmentCount - installmentNumber : 0
 
   const [type, setType] = useState<TransactionType>(transaction?.type ?? 'EXPENSE')
   // 30.5 -> "30,5": o mesmo formato que a pessoa digitaria.
@@ -35,8 +40,10 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const [categoryId, setCategoryId] = useState(transaction?.categoryId?.toString() ?? '') // '' = sem categoria
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [occurredOn, setOccurredOn] = useState(transaction?.occurredOn ?? defaultDate)
-  // 1 = à vista. Só existe na criação de despesa; cada parcela salva vira uma transação comum.
+  // 1 = à vista. Só existe na criação de despesa.
   const [installments, setInstallments] = useState(1)
+  // Editando parcela: "só esta" ou "esta e as próximas" (vale para salvar e excluir).
+  const [scope, setScope] = useState<EditScope>('THIS')
   const [categories, setCategories] = useState<CategoryResponse[]>([])
 
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +54,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const canSplit = !editing && type === 'EXPENSE'
   const split = canSplit && installments > 1
   const previewAmount = parseAmount(amountText)
+  const applyToFollowing = isInstallment && scope === 'FOLLOWING'
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -127,7 +135,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
         }
         // PUT substitui todos os campos (mesmo TransactionRequest do POST).
         saved = await api<TransactionResponse>(
-          editing ? `/api/transactions/${transaction.id}` : '/api/transactions',
+          editing ? `/api/transactions/${transaction.id}?scope=${scope}` : '/api/transactions',
           { method: editing ? 'PUT' : 'POST', body: JSON.stringify(request) },
         )
       }
@@ -152,7 +160,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
 
   async function handleDelete() {
     // Erro aqui é exibido pelo próprio ConfirmDialog.
-    await api<void>(`/api/transactions/${transaction!.id}`, { method: 'DELETE' })
+    await api<void>(`/api/transactions/${transaction!.id}?scope=${scope}`, { method: 'DELETE' })
     onDeleted()
   }
 
@@ -178,7 +186,11 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
       <div className="sheet-body">
         <div className="sheet-handle" aria-hidden="true" />
         <header className="sheet-header">
-          <h2 id="sheet-title">{editing ? 'Editar transação' : 'Nova transação'}</h2>
+          <h2 id="sheet-title">
+            {isInstallment
+              ? `Parcela ${installmentNumber} de ${installmentCount}`
+              : editing ? 'Editar transação' : 'Nova transação'}
+          </h2>
           <button type="button" className="icon-btn" aria-label="Fechar"
                   onClick={() => dialogRef.current?.close()}>
             <Close />
@@ -186,14 +198,39 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
         </header>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div className="segmented" role="radiogroup" aria-label="Tipo">
-            {(['EXPENSE', 'INCOME'] as const).map(t => (
-              <button key={t} type="button" role="radio" aria-checked={type === t}
-                      className={type === t ? 'active' : ''} onClick={() => changeType(t)}>
-                {t === 'EXPENSE' ? 'Despesa' : 'Receita'}
-              </button>
-            ))}
-          </div>
+          {/* Parcela é sempre despesa: não oferece trocar o tipo. */}
+          {!isInstallment && (
+            <div className="segmented" role="radiogroup" aria-label="Tipo">
+              {(['EXPENSE', 'INCOME'] as const).map(t => (
+                <button key={t} type="button" role="radio" aria-checked={type === t}
+                        className={type === t ? 'active' : ''} onClick={() => changeType(t)}>
+                  {t === 'EXPENSE' ? 'Despesa' : 'Receita'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {followingCount > 0 && (
+            <div className="field">
+              <span className="field-label">Aplicar alterações em</span>
+              <div className="segmented" role="radiogroup" aria-label="Aplicar alterações em">
+                <button type="button" role="radio" aria-checked={scope === 'THIS'}
+                        className={scope === 'THIS' ? 'active' : ''} onClick={() => setScope('THIS')}>
+                  Só esta parcela
+                </button>
+                <button type="button" role="radio" aria-checked={scope === 'FOLLOWING'}
+                        className={scope === 'FOLLOWING' ? 'active' : ''} onClick={() => setScope('FOLLOWING')}>
+                  Esta e as próximas
+                </button>
+              </div>
+              {applyToFollowing && (
+                <span className="hint">
+                  Categoria, forma de pagamento e descrição valem também para as {followingCount} parcela(s)
+                  seguinte(s). Valor e data mudam só nesta.
+                </span>
+              )}
+            </div>
+          )}
 
           <label className="amount-field">
             {split ? 'Valor total da compra' : 'Valor'}
@@ -250,9 +287,8 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
           <label>
             Descrição
             <input value={description} onChange={e => setDescription(e.target.value)}
-                   placeholder={type === 'EXPENSE' ? 'Ex.: Mercado' : 'Ex.: Salário'}
-                   maxLength={split ? 247 : 255} />
-            {split && <span className="hint">Cada parcela recebe “(1/{installments})”, “(2/{installments})”…</span>}
+                   placeholder={type === 'EXPENSE' ? 'Ex.: Mercado' : 'Ex.: Salário'} maxLength={255} />
+            {split && <span className="hint">Todas as parcelas recebem esta descrição, com “(1/{installments})”, “(2/{installments})”…</span>}
           </label>
           {fieldErrors.description && <p className="field-error">{fieldErrors.description}</p>}
 
@@ -272,12 +308,16 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
 
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Salvando...' : editing ? 'Salvar alterações' : split ? `Lançar ${installments} parcelas` : 'Salvar'}
+            {saving
+              ? 'Salvando...'
+              : split ? `Lançar ${installments} parcelas`
+                : applyToFollowing ? `Salvar nesta e nas próximas ${followingCount}`
+                  : editing ? 'Salvar alterações' : 'Salvar'}
           </button>
           {editing && (
             <button type="button" className="btn-text-danger" disabled={saving}
                     onClick={() => setConfirmingDelete(true)}>
-              Excluir transação
+              {applyToFollowing ? 'Excluir esta e as próximas parcelas' : isInstallment ? 'Excluir esta parcela' : 'Excluir transação'}
             </button>
           )}
         </form>
@@ -285,8 +325,10 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
 
       {confirmingDelete && (
         <ConfirmDialog
-          title="Excluir transação?"
-          message="Ela sai da lista e dos totais do mês. Esta ação não pode ser desfeita."
+          title={applyToFollowing ? `Excluir ${followingCount + 1} parcelas?` : 'Excluir transação?'}
+          message={applyToFollowing
+            ? `Esta parcela e as ${followingCount} seguinte(s) saem das listas e dos totais. As anteriores continuam. Esta ação não pode ser desfeita.`
+            : 'Ela sai da lista e dos totais do mês. Esta ação não pode ser desfeita.'}
           confirmLabel="Excluir"
           onConfirm={handleDelete}
           onCancel={() => setConfirmingDelete(false)}

@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -226,6 +227,64 @@ class TransactionRepositoryTest {
         // Sem o JOIN FETCH seriam 6 consultas: 1 para as transações + 1 por categoria (N+1).
         assertThat(result).hasSize(5);
         assertThat(stats.getPrepareStatementCount()).isEqualTo(1);
+    }
+
+    @Test
+    void findsOnlyTheFollowingInstallmentsOfTheSameGroupAndUser() {
+        UUID ps5 = UUID.randomUUID();
+        UUID tv = UUID.randomUUID();
+        for (int n = 1; n <= 3; n++) {
+            transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO,
+                    "PS5", DAY.plusMonths(n - 1), ps5, n, 3));
+        }
+        transactions.save(Transaction.installment(alice, null, new BigDecimal("50.00"), PaymentMethod.CREDITO,
+                "TV", DAY.plusMonths(1), tv, 2, 2));
+        flushAndClear();
+
+        assertThat(transactions.findFollowingInstallments(alice, ps5, 1))
+                .extracting(Transaction::getInstallmentNumber).containsExactly(2, 3);
+        assertThat(transactions.findFollowingInstallments(alice, ps5, 3)).isEmpty();
+        // Mesmo conhecendo o grupo, outro usuário não enxerga as parcelas.
+        assertThat(transactions.findFollowingInstallments(bob, ps5, 1)).isEmpty();
+    }
+
+    @Test
+    void savesInstallmentColumnsAsUuidAndIntegers() {
+        UUID group = UUID.randomUUID();
+        Long id = transactions.save(Transaction.installment(alice, null, new BigDecimal("100.00"), PaymentMethod.CREDITO,
+                "PS5", DAY, group, 2, 3)).getId();
+        flushAndClear();
+
+        Transaction found = transactions.findByIdAndUserId(id, alice).orElseThrow();
+        assertThat(found.getInstallmentGroup()).isEqualTo(group);
+        assertThat(found.getInstallmentNumber()).isEqualTo(2);
+        assertThat(found.getInstallmentCount()).isEqualTo(3);
+        assertThat(found.isInstallment()).isTrue();
+    }
+
+    // Um INSERT inválido por teste: no Postgres, depois de um erro a transação
+    // fica "abortada" e os comandos seguintes nem são avaliados (erro 25P02).
+    @Test
+    void databaseRejectsInstallmentNumberAboveCount() {
+        // Parcela 4 de 3: o CHECK da V7 recusa mesmo sem passar pela aplicação.
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at,
+                                          installment_group, installment_number, installment_count)
+                VALUES (?, 10, 'EXPENSE', 'CREDITO', ?, now(), gen_random_uuid(), 4, 3)
+                """, alice, DAY))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_installment");
+    }
+
+    @Test
+    void databaseRejectsGroupWithoutNumberAndCount() {
+        // Só o grupo, sem número e total: recusado (as três colunas andam juntas).
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, payment_method, occurred_on, created_at, installment_group)
+                VALUES (?, 10, 'EXPENSE', 'CREDITO', ?, now(), gen_random_uuid())
+                """, alice, DAY))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_installment");
     }
 
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {

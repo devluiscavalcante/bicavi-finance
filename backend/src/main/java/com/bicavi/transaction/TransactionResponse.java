@@ -13,7 +13,9 @@ public record TransactionResponse(
         Long categoryId,
         String categoryName,
         String description,
-        LocalDate occurredOn
+        LocalDate occurredOn,
+        Integer installmentNumber,  // null se não for parcela
+        Integer installmentCount    // null se não for parcela
 ) {
 
     public static TransactionResponse from(Transaction tx) {
@@ -26,6 +28,8 @@ public record TransactionResponse(
                 category == null ? null : category.getId(),
                 category == null ? null : category.getName(),
                 tx.getDescription(),
-                tx.getOccurredOn());
+                tx.getOccurredOn(),
+                tx.getInstallmentNumber(),
+                tx.getInstallmentCount());
     }
 }

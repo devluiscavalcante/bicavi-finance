@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type TouchEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import {
-  addMonths, currentMonth, formatDay, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
-  monthOf, todayIso,
+  addMonths, currentMonth, formatDayHeading, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
+  monthOf, todayIso, transactionTitle,
 } from '../format'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, LogOut, Plus, Tag, Wallet } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
 import type {
-  MonthlySummaryResponse, PeriodResponse, TransactionResponse, UserResponse,
+  MonthlySummaryResponse, PeriodResponse, TransactionResponse, TransactionType, UserResponse,
 } from '../types'
 
 interface MonthData {
@@ -21,6 +21,16 @@ type MonthResult = { month: string } & ({ data: MonthData } | { error: string })
 
 // Painel fechado, aberto para criar, ou aberto editando uma transação.
 type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
+
+type Filter = 'ALL' | TransactionType
+
+// Gesto de arrastar: distância mínima, quanto mais horizontal que vertical
+// (para não confundir com a rolagem da página) e duração máxima.
+const SWIPE_MIN_PX = 60
+const SWIPE_RATIO = 1.5
+const SWIPE_MAX_MS = 700
+// No Safari, arrastar a partir da borda é o "voltar" do navegador: ignoramos.
+const EDGE_PX = 24
 
 export function MonthPage() {
   const navigate = useNavigate()
@@ -37,6 +47,11 @@ export function MonthPage() {
   const [sheet, setSheet] = useState<SheetState>({ mode: 'closed' })
   // Transação recém-criada ou editada, destacada por um instante na lista.
   const [highlightId, setHighlightId] = useState<number | null>(null)
+  const [filter, setFilter] = useState<Filter>('ALL')
+  // Direção da última troca de mês: define de que lado o conteúdo novo entra.
+  const [slide, setSlide] = useState<'next' | 'prev' | null>(null)
+  // Ponto onde o dedo encostou. useRef (e não useState): mudar não precisa redesenhar a tela.
+  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null)
 
   // Derivado, não armazenado: se o resultado é de outro mês, o atual ainda está
   // carregando. Assim não precisamos "zerar" o estado ao trocar de mês.
@@ -76,7 +91,32 @@ export function MonthPage() {
   }, [month, reloadKey])
 
   function goToMonth(delta: number) {
+    if (delta < 0 && !canGoBack) return
+    setSlide(delta > 0 ? 'next' : 'prev')
     setSearchParams({ month: addMonths(month, delta) })
+  }
+
+  function handleTouchStart(e: TouchEvent) {
+    const touch = e.touches[0]
+    // Com o painel aberto o gesto não vale (o toque dentro dele também chega aqui).
+    const ignored = sheet.mode !== 'closed' || e.touches.length !== 1
+      || touch.clientX < EDGE_PX || touch.clientX > window.innerWidth - EDGE_PX
+    touchStart.current = ignored ? null : { x: touch.clientX, y: touch.clientY, time: Date.now() }
+  }
+
+  function handleTouchEnd(e: TouchEvent) {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const touch = e.changedTouches[0]
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    const isSwipe = Math.abs(dx) >= SWIPE_MIN_PX
+      && Math.abs(dx) >= Math.abs(dy) * SWIPE_RATIO
+      && Date.now() - start.time <= SWIPE_MAX_MS
+    if (!isSwipe) return
+    // Dedo para a esquerda (dx negativo) = próximo mês, como virar página.
+    goToMonth(dx < 0 ? 1 : -1)
   }
 
   function handleLogout() {
@@ -91,6 +131,7 @@ export function MonthPage() {
     setHighlightId(tx.id)
     const target = monthOf(tx.occurredOn)
     if (target !== month) {
+      setSlide(null)
       setSearchParams({ month: target })
     } else {
       setReloadKey(k => k + 1)
@@ -106,7 +147,7 @@ export function MonthPage() {
   const defaultDate = month === currentMonth() ? todayIso() : `${month}-01`
 
   return (
-    <main>
+    <main onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <header className="top">
         <span className="avatar">{user?.name.charAt(0).toUpperCase() ?? ''}</span>
         <div className="greeting">
@@ -135,16 +176,22 @@ export function MonthPage() {
         </button>
       </nav>
 
-      {!current && <MonthSkeleton />}
-      {current && 'error' in current && <p className="error">{current.error}</p>}
-      {current && 'data' in current && (
-        <MonthContent
-          data={current.data}
-          highlightId={highlightId}
-          editable={editable}
-          onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
-        />
-      )}
+      {/* key={month}: a cada mês o bloco é recriado e a animação de entrada roda
+          de novo, vindo do lado certo (próximo pela direita, anterior pela esquerda). */}
+      <div key={month} className={slide ? `month-body slide-${slide}` : 'month-body'}>
+        {!current && <MonthSkeleton />}
+        {current && 'error' in current && <p className="error">{current.error}</p>}
+        {current && 'data' in current && (
+          <MonthContent
+            data={current.data}
+            highlightId={highlightId}
+            editable={editable}
+            filter={filter}
+            onFilterChange={setFilter}
+            onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
+          />
+        )}
+      </div>
 
       {editable && (
         <button className="fab" onClick={() => setSheet({ mode: 'create' })} aria-label="Nova transação"
@@ -176,12 +223,39 @@ function MonthSkeleton() {
   )
 }
 
-function MonthContent({ data: { summary, transactions }, highlightId, editable, onSelect }: {
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: 'ALL', label: 'Todas' },
+  { value: 'EXPENSE', label: 'Despesas' },
+  { value: 'INCOME', label: 'Receitas' },
+]
+
+// Agrupa por dia mantendo a ordem da API (mais recentes primeiro):
+// transações seguidas com a mesma data formam um grupo.
+function groupByDay(list: TransactionResponse[]) {
+  const groups: { date: string; items: TransactionResponse[] }[] = []
+  for (const tx of list) {
+    const last = groups.at(-1)
+    if (last && last.date === tx.occurredOn) {
+      last.items.push(tx)
+    } else {
+      groups.push({ date: tx.occurredOn, items: [tx] })
+    }
+  }
+  return groups
+}
+
+function MonthContent({ data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect }: {
   data: MonthData
   highlightId: number | null
   editable: boolean
+  filter: Filter
+  onFilterChange: (f: Filter) => void
   onSelect: (tx: TransactionResponse) => void
 }) {
+  const visible = filter === 'ALL' ? transactions : transactions.filter(tx => tx.type === filter)
+  const groups = groupByDay(visible)
+  let rowIndex = 0 // para a entrada em cascata atravessar os grupos
+
   return (
     <>
       <section className="hero reveal">
@@ -229,54 +303,72 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
       )}
 
       <section className="card reveal" style={{ animationDelay: '160ms' }}>
-        <h2>Transações</h2>
-        {transactions.length === 0 ? (
+        <div className="card-head">
+          <h2>Transações</h2>
+          <div className="segmented small" role="tablist" aria-label="Filtrar transações">
+            {FILTERS.map(f => (
+              <button key={f.value} type="button" role="tab" aria-selected={filter === f.value}
+                      className={filter === f.value ? 'active' : ''} onClick={() => onFilterChange(f.value)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {groups.length === 0 ? (
           <div className="empty">
             <Wallet />
-            <p>Nenhuma transação neste mês.</p>
-            {editable && <small>Toque no + para adicionar.</small>}
+            <p>
+              {transactions.length === 0
+                ? 'Nenhuma transação neste mês.'
+                : filter === 'EXPENSE' ? 'Nenhuma despesa neste mês.' : 'Nenhuma receita neste mês.'}
+            </p>
+            {editable && transactions.length === 0 && <small>Toque no + para adicionar.</small>}
           </div>
         ) : (
-          <ul className="transactions">
-            {transactions.map((tx, i) => {
-              const kind = tx.type === 'INCOME' ? 'income' : 'expense'
-              // Linhas entram em cascata; o teto de 12 evita esperar demais em listas longas.
-              const delay = 200 + Math.min(i, 12) * 40
-              const content = (
-                <>
-                  <span className={`tx-icon ${kind}`}>
-                    {tx.type === 'INCOME' ? <ArrowUp /> : <ArrowDown />}
-                  </span>
-                  <div className="tx-main">
-                    <strong>
-                      {tx.description ?? tx.categoryName ?? (tx.type === 'INCOME' ? 'Receita' : 'Despesa')}
-                    </strong>
-                    <small>
-                      {formatDay(tx.occurredOn)} · {tx.categoryName ?? 'Sem categoria'}
-                      {tx.paymentMethod && ` · ${formatPaymentMethod(tx.paymentMethod)}`}
-                    </small>
-                  </div>
-                  <span className={`tx-amount ${kind}`}>
-                    {tx.type === 'INCOME' ? '+' : '−'} {formatMoney(tx.amount)}
-                  </span>
-                </>
-              )
-              return (
-                <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
-                    style={{ animationDelay: `${delay}ms` }}>
-                  {/* Mês aberto: a linha é um <button> (teclado e leitor de tela funcionam).
-                      Mês fechado: só texto, nada para clicar. */}
-                  {editable ? (
-                    <button type="button" className="tx-row" onClick={() => onSelect(tx)}>
-                      {content}
-                    </button>
-                  ) : (
-                    <div className="tx-row">{content}</div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+          groups.map(group => (
+            <div key={group.date} className="day-group">
+              <h3 className="day-heading">{formatDayHeading(group.date)}</h3>
+              <ul className="transactions">
+                {group.items.map(tx => {
+                  const kind = tx.type === 'INCOME' ? 'income' : 'expense'
+                  // Linhas entram em cascata; o teto de 12 evita esperar demais em listas longas.
+                  const delay = 200 + Math.min(rowIndex++, 12) * 40
+                  const content = (
+                    <>
+                      <span className={`tx-icon ${kind}`}>
+                        {tx.type === 'INCOME' ? <ArrowUp /> : <ArrowDown />}
+                      </span>
+                      <div className="tx-main">
+                        <strong>{transactionTitle(tx)}</strong>
+                        <small>
+                          {tx.categoryName ?? 'Sem categoria'}
+                          {tx.paymentMethod && ` · ${formatPaymentMethod(tx.paymentMethod)}`}
+                        </small>
+                      </div>
+                      <span className={`tx-amount ${kind}`}>
+                        {tx.type === 'INCOME' ? '+' : '−'} {formatMoney(tx.amount)}
+                      </span>
+                    </>
+                  )
+                  return (
+                    <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
+                        style={{ animationDelay: `${delay}ms` }}>
+                      {/* Mês aberto: a linha é um <button> (teclado e leitor de tela funcionam).
+                          Mês fechado: só texto, nada para clicar. */}
+                      {editable ? (
+                        <button type="button" className="tx-row" onClick={() => onSelect(tx)}>
+                          {content}
+                        </button>
+                      ) : (
+                        <div className="tx-row">{content}</div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ))
         )}
       </section>
     </>

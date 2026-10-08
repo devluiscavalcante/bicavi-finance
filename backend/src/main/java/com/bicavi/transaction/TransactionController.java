@@ -58,15 +58,18 @@ public class TransactionController {
         return service.createInstallments(CurrentUser.id(jwt), request);
     }
 
+    // ?scope=FOLLOWING (parcelas): aplica também às parcelas seguintes. Padrão: só esta.
     @PutMapping("/{id}")
     public TransactionResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
-                                      @Valid @RequestBody TransactionRequest request) {
-        return service.update(CurrentUser.id(jwt), id, request);
+                                      @Valid @RequestBody TransactionRequest request,
+                                      @RequestParam(defaultValue = "THIS") EditScope scope) {
+        return service.update(CurrentUser.id(jwt), id, request, scope);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
-        service.delete(CurrentUser.id(jwt), id);
+    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                       @RequestParam(defaultValue = "THIS") EditScope scope) {
+        service.delete(CurrentUser.id(jwt), id, scope);
     }
 }

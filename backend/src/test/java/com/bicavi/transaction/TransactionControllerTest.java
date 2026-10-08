@@ -22,8 +22,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -53,7 +55,7 @@ class TransactionControllerTest {
     @Test
     void listParsesMonthAndPassesLoggedUser() throws Exception {
         when(service.list(USER, YearMonth.of(2026, 10), 3L)).thenReturn(List.of(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6))));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6), null, null)));
 
         mockMvc.perform(get("/api/transactions").with(loggedUser()).param("month", "2026-10").param("categoryId", "3"))
                 .andExpect(status().isOk())
@@ -84,7 +86,7 @@ class TransactionControllerTest {
     @Test
     void createReturns201() throws Exception {
         when(service.create(eq(USER), any())).thenReturn(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, LocalDate.of(2026, 10, 6)));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, LocalDate.of(2026, 10, 6), null, null));
 
         mockMvc.perform(post("/api/transactions").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -102,9 +104,9 @@ class TransactionControllerTest {
     void createInstallmentsReturns201WithAllParts() throws Exception {
         when(service.createInstallments(eq(USER), any())).thenReturn(List.of(
                 new TransactionResponse(1L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
-                        null, null, "TV (1/2)", LocalDate.of(2026, 11, 10)),
+                        null, null, "TV", LocalDate.of(2026, 11, 10), 1, 2),
                 new TransactionResponse(2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO,
-                        null, null, "TV (2/2)", LocalDate.of(2026, 12, 10))));
+                        null, null, "TV", LocalDate.of(2026, 12, 10), 2, 2)));
 
         mockMvc.perform(post("/api/transactions/installments").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -114,7 +116,7 @@ class TransactionControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[1].description").value("TV (2/2)"));
+                .andExpect(jsonPath("$[1].installmentNumber").value(2));
 
         verify(service).createInstallments(USER, new InstallmentRequest(
                 new BigDecimal("100"), 2, PaymentMethod.CREDITO, null, "TV", LocalDate.of(2026, 11, 10)));
@@ -132,6 +134,37 @@ class TransactionControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.errors.installments").exists());
         }
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void updatePassesScopeFromQueryParameter() throws Exception {
+        when(service.update(eq(USER), eq(2L), any(), eq(EditScope.FOLLOWING))).thenReturn(new TransactionResponse(
+                2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null, "TV",
+                LocalDate.of(2026, 12, 10), 2, 2));
+
+        mockMvc.perform(put("/api/transactions/2").with(loggedUser()).param("scope", "FOLLOWING")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount": 50, "type": "EXPENSE", "paymentMethod": "CREDITO", "occurredOn": "2026-12-10"}
+                                """))
+                .andExpect(status().isOk());
+
+        verify(service).update(eq(USER), eq(2L), any(), eq(EditScope.FOLLOWING));
+    }
+
+    @Test
+    void deleteWithoutScopeAffectsOnlyThisTransaction() throws Exception {
+        mockMvc.perform(delete("/api/transactions/2").with(loggedUser()))
+                .andExpect(status().isNoContent());
+
+        verify(service).delete(USER, 2L, EditScope.THIS);
+    }
+
+    @Test
+    void unknownScopeReturns400() throws Exception {
+        mockMvc.perform(delete("/api/transactions/2").with(loggedUser()).param("scope", "ALL"))
+                .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
 

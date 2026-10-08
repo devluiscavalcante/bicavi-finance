@@ -94,3 +94,29 @@ export function installmentPreview(total: number, count: number): string {
     ? `${count}x de ${baseText}`
     : `${count}x de ${baseText} (1ª de ${formatMoney(first / 100)})`
 }
+
+// Título da transação na lista: descrição (ou categoria), mais "(2/3)" se for parcela.
+export function transactionTitle(tx: {
+  description: string | null
+  categoryName: string | null
+  type: 'INCOME' | 'EXPENSE'
+  installmentNumber: number | null
+  installmentCount: number | null
+}): string {
+  const installment = tx.installmentNumber !== null ? ` (${tx.installmentNumber}/${tx.installmentCount})` : ''
+  const fallback = tx.installmentNumber !== null ? 'Parcela' : tx.type === 'INCOME' ? 'Receita' : 'Despesa'
+  return (tx.description ?? tx.categoryName ?? fallback) + installment
+}
+
+// Título de um grupo de dias na lista: "Hoje", "Ontem", "Amanhã" ou "sexta-feira, 10 de outubro".
+export function formatDayHeading(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // data LOCAL (ver formatDay)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((date.getTime() - today.getTime()) / 86_400_000)
+  if (diffDays === 0) return 'Hoje'
+  if (diffDays === -1) return 'Ontem'
+  if (diffDays === 1) return 'Amanhã'
+  return date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+}

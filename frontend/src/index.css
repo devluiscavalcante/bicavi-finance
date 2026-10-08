@@ -1158,3 +1158,76 @@ a.icon-btn {
   font-weight: 400;
   color: var(--muted);
 }
+
+/* ---------- Lista por dia + filtro ---------- */
+
+/* Título "Transações" e o filtro na mesma linha (quebra em telas estreitas). */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.card-head h2 {
+  margin-bottom: 0;
+}
+
+/* Versão compacta do seletor segmentado. */
+.segmented.small {
+  display: inline-grid;
+  grid-template-columns: repeat(3, auto);
+  padding: 3px;
+}
+
+.segmented.small button {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.day-group + .day-group {
+  margin-top: 12px;
+}
+
+/* "Hoje", "Ontem", "sábado, 10 de outubro". */
+.day-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 2px;
+}
+
+.day-heading::first-letter {
+  text-transform: uppercase;
+}
+
+/* ---------- Troca de mês (setas ou gesto) ---------- */
+
+/* pan-y: o navegador cuida só da rolagem vertical; o arrasto lateral é nosso. */
+main {
+  touch-action: pan-y pinch-zoom;
+}
+
+.month-body.slide-next {
+  animation: slide-from-right 0.35s var(--ease);
+}
+
+.month-body.slide-prev {
+  animation: slide-from-left 0.35s var(--ease);
+}
+
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}

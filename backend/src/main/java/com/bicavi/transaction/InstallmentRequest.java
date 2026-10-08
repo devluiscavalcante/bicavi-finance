@@ -19,8 +19,8 @@ public record InstallmentRequest(
         @NotNull @Min(2) @Max(24) Integer installments,
         PaymentMethod paymentMethod,  // obrigatório (é despesa); validado na entidade
         Long categoryId,
-        // 255 da coluna menos o sufixo " (24/24)" acrescentado em cada parcela.
-        @Size(max = 247) String description,
+        // Mesma descrição em todas as parcelas; o "(2/3)" vem de installmentNumber/Count.
+        @Size(max = 255) String description,
         @NotNull LocalDate firstDate
 ) {
 }
