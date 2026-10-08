@@ -1,0 +1,11 @@
+# Lido pelo IntelliJ e pelo VS Code: arquivos novos já nascem com LF e UTF-8,
+# combinando com o .gitattributes.
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+
+[*.cmd]
+end_of_line = crlf

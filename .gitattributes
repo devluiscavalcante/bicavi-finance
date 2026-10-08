@@ -1,0 +1,14 @@
+# Fim de linha do repositório: LF em tudo (padrão do Linux, onde rodam o CI e o Docker).
+# Vale em qualquer máquina, sem depender do core.autocrlf de cada uma.
+# Sem isto, o Git do Windows converte para CRLF ao baixar e avisa
+# "LF will be replaced by CRLF" a cada commit.
+* text=auto eol=lf
+
+# O cmd.exe espera CRLF (mvnw.cmd).
+*.cmd text eol=crlf
+
+# Binários: nunca converter nada.
+*.png binary
+*.ico binary
+*.jar binary
+*.woff2 binary
