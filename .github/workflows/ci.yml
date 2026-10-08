@@ -1,5 +1,5 @@
 # Integração contínua: a cada push na develop/master (e em pull requests),
-# o GitHub roda os testes do backend e o lint + build do frontend numa máquina
+# o GitHub roda os testes do backend e o lint, testes e build do frontend numa máquina
 # limpa. O resultado aparece como ✅/❌ em cada commit.
 #
 # Por que vale a pena: hoje, o que impede código quebrado de chegar à master
@@ -45,7 +45,7 @@ jobs:
         run: ./mvnw -B test
 
   frontend:
-    name: Frontend (lint + build)
+    name: Frontend (lint, testes e build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -62,5 +62,7 @@ jobs:
       # npm ci: instala exatamente o package-lock (o mesmo que o Docker usa).
       - run: npm ci
       - run: npm run lint
+      # Vitest: funções puras de formatação, valores e listas.
+      - run: npm test
       # tsc -b && vite build: falha se houver erro de tipos.
       - run: npm run build

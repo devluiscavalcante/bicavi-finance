@@ -5,6 +5,7 @@ import {
   addMonths, currentMonth, formatDayHeading, formatMoney, formatMonth, formatPaymentMethod, isValidMonth,
   monthOf, todayIso, transactionTitle,
 } from '../format'
+import { groupByDay } from '../lists'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Close, CreditCard, LogOut, Plus, Tag, Wallet } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
 import type {
@@ -233,21 +234,6 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'EXPENSE', label: 'Despesas' },
   { value: 'INCOME', label: 'Receitas' },
 ]
-
-// Agrupa por dia mantendo a ordem da API (mais recentes primeiro):
-// transações seguidas com a mesma data formam um grupo.
-function groupByDay(list: TransactionResponse[]) {
-  const groups: { date: string; items: TransactionResponse[] }[] = []
-  for (const tx of list) {
-    const last = groups.at(-1)
-    if (last && last.date === tx.occurredOn) {
-      last.items.push(tx)
-    } else {
-      groups.push({ date: tx.occurredOn, items: [tx] })
-    }
-  }
-  return groups
-}
 
 function MonthContent({ data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect }: {
   data: MonthData

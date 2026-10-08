@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api, ApiError } from '../api'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { sortByName } from '../lists'
 import { Check, ChevronLeft, Close, CreditCard, Pencil, Tag, Trash } from '../icons'
 import type { CardResponse, CategoryResponse, TransactionType } from '../types'
 
@@ -9,11 +10,6 @@ import type { CardResponse, CategoryResponse, TransactionType } from '../types'
 interface NamedItem {
   id: number
   name: string
-}
-
-// Ordem alfabética respeitando acentos ("Água" junto do "A", não depois do "Z").
-function sortByName<T extends NamedItem>(list: T[]) {
-  return [...list].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
 function errorMessage(e: unknown) {

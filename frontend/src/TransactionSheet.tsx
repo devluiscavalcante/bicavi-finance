@@ -4,6 +4,7 @@ import { api, ApiError } from './api'
 import { ConfirmDialog } from './ConfirmDialog'
 import { formatPaymentMethod, installmentPreview, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
+import { sortByName } from './lists'
 import type {
   CardResponse, CategoryResponse, EditScope, InstallmentRequest, PaymentMethod, PeriodResponse, TransactionRequest,
   TransactionResponse, TransactionType,
@@ -78,7 +79,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
       // Sem categorias o formulário ainda funciona ("Sem categoria").
     })
     api<CardResponse[]>('/api/cards')
-      .then(list => setCards([...list].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))))
+      .then(list => setCards(sortByName(list)))
       .catch(() => setCards([]))
   }, [])
 
