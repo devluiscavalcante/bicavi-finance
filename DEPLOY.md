@@ -3,11 +3,15 @@
 O Bicavi roda em containers Docker num computador de casa. O **Tailscale** cria uma
 rede privada entre esse computador e os iPhones, com endereço **HTTPS válido**
 (necessário para instalar o app no iPhone). Nada fica exposto na internet: só os
-aparelhos da sua rede Tailscale acessam.
+aparelhos da sua rede Tailscale acessam. Isso funciona **de qualquer lugar**
+(Wi-Fi de casa, 4G, outra cidade), desde que o PC de casa esteja ligado e com internet.
 
 ```
 iPhone (app Tailscale) --HTTPS--> PC de casa: Tailscale -> nginx -> backend -> Postgres
 ```
+
+> **Nunca** use `tailscale funnel`: ele publica o app na internet aberta,
+> e qualquer pessoa conseguiria criar conta.
 
 O PC de casa **não precisa** de Java, Node ou Maven: o Docker compila tudo.
 
@@ -21,6 +25,17 @@ O PC de casa **não precisa** de Java, Node ou Maven: o Docker compila tudo.
    - Em *Settings → General*, marque **"Start Docker Desktop when you sign in"**.
 3. **Energia do Windows**: em *Configurações → Sistema → Energia*, coloque
    **"Suspender: Nunca"** (com o PC dormindo, o app fica fora do ar).
+4. **Voltar sozinho depois de reiniciar.** O Docker Desktop só abre quando alguém
+   **entra no Windows**. Se o Windows Update reiniciar o PC de madrugada, o app
+   fica fora do ar até alguém fazer login. Escolha uma das opções:
+   - **Login automático** (o app volta sozinho): em *Configurações → Contas →
+     Opções de entrada*, desligue *"Para maior segurança, permitir apenas a
+     entrada do Windows Hello..."*. Depois rode `netplwiz`, desmarque *"Os
+     usuários devem digitar um nome de usuário e uma senha..."* e confirme a
+     senha. Contrapartida: quem tiver acesso físico ao PC entra sem senha.
+   - **Sem login automático:** em *Configurações → Windows Update → Opções
+     avançadas → Horário ativo*, defina o período em que vocês usam o app, e
+     lembre de entrar no Windows sempre que o PC reiniciar.
 
 ## 2. Baixar o projeto
 
@@ -79,6 +94,9 @@ Abra **http://localhost:8088** no navegador do PC: a tela de login deve aparecer
    O comando mostra o endereço do app, algo como
    `https://nome-do-pc.tailabc123.ts.net`. Essa configuração continua valendo
    depois de reiniciar o PC.
+4. No ícone do Tailscale (perto do relógio), abra as preferências e ative
+   **"Run unattended"**: assim o PC continua na rede Tailscale mesmo antes de
+   alguém entrar no Windows ou depois de sair da conta.
 
 ## 6. Instalar nos iPhones
 
@@ -87,10 +105,14 @@ Em **cada** iPhone:
 1. Instale o app **Tailscale** (App Store) e entre na **mesma conta** do PC
    (ou, no painel do Tailscale, convide a outra pessoa para a sua rede).
    Deixe a VPN do Tailscale **ligada**.
-2. Abra o endereço `https://...ts.net` no **Safari**.
-3. Toque em **Compartilhar → Adicionar à Tela de Início**.
-4. Abra o Bicavi pelo ícone. Na primeira vez, **crie a conta** (vocês usam o
+2. No app Tailscale, nas configurações, ative **VPN On Demand**. O iOS às vezes
+   desliga a VPN (ao reiniciar o celular, por exemplo); com isso ela religa sozinha.
+3. Abra o endereço `https://...ts.net` no **Safari**.
+4. Toque em **Compartilhar → Adicionar à Tela de Início**.
+5. Abra o Bicavi pelo ícone. Na primeira vez, **crie a conta** (vocês usam o
    mesmo login). No outro iPhone, só entre com esse login.
+6. **Teste fora de casa:** desligue o Wi-Fi do iPhone e abra o Bicavi pelo 4G.
+   Se carregar, vai funcionar de qualquer lugar.
 
 > O app instalado tem armazenamento próprio: mesmo já tendo entrado pelo Safari,
 > é preciso fazer login de novo dentro do app.
@@ -112,8 +134,17 @@ Agende para todo dia às 22h (PowerShell **como Administrador**):
 ```powershell
 $acao = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\bicavi\scripts\backup.ps1 -Destino `"$env:USERPROFILE\OneDrive\Bicavi-backups`""
 $quando = New-ScheduledTaskTrigger -Daily -At 22:00
-Register-ScheduledTask -TaskName 'Bicavi Backup' -Action $acao -Trigger $quando
+$opcoes = New-ScheduledTaskSettingsSet -StartWhenAvailable
+Register-ScheduledTask -TaskName 'Bicavi Backup' -Action $acao -Trigger $quando -Settings $opcoes
 ```
+
+`-StartWhenAvailable`: se o PC estiver desligado às 22h, o backup roda assim que
+ele voltar. O backup depende do Docker Desktop aberto (e do OneDrive para subir
+para a nuvem), e os dois só rodam com alguém logado no Windows: mais um motivo
+para o login automático do passo 1.
+
+**Confira de vez em quando** se há arquivos novos na pasta de backups. Um backup
+que parou de rodar não avisa ninguém.
 
 ## 8. Atualizar para uma versão nova
 
@@ -183,6 +214,8 @@ O script pede para digitar `RESTAURAR` antes de continuar.
 | Sintoma | Causa provável |
 |---|---|
 | iPhone não abre o endereço `.ts.net` | VPN do Tailscale desligada no iPhone, ou PC de casa desligado/suspenso |
+| Parou de abrir depois de uma noite | PC reiniciou (Windows Update) e ninguém entrou no Windows: o Docker Desktop não abriu |
+| Funciona no Wi-Fi mas não no 4G | VPN do Tailscale desligada no iPhone (ative o VPN On Demand), ou o app Tailscale sem permissão de usar dados móveis |
 | `docker compose` dá erro de conexão | Docker Desktop não está aberto |
 | Login pede senha de novo no app instalado | Normal no iPhone: o app tem armazenamento próprio |
 | Página abre mas mostra erro ao carregar dados | Backend iniciando (aguarde ~20 s) ou parado: veja `docker compose logs backend` |
