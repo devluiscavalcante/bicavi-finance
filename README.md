@@ -10,7 +10,7 @@
 ![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 
-<img src="docs/images/demo.gif" alt="Demonstração: login, resumo do mês, nova despesa, filtro por fatura, próximo mês e cartões" width="300">
+<img src="docs/images/demo.webp" alt="Demonstração: login, resumo do mês, nova despesa, filtro por fatura, próximo mês e cartões" width="300">
 
 <sub>Dados fictícios · <a href="docs/images/demo.mp4">versão em MP4</a></sub>
 
