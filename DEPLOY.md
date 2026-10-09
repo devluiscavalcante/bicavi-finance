@@ -175,6 +175,32 @@ o que desfaz é restaurar o backup feito **antes** dela rodar.
 
 Os iPhones recebem a versão nova sozinhos na próxima vez que o app abrir.
 
+### Se o `git pull` reclamar de históricos divergentes
+
+Acontece quando o histórico da `master` foi reescrito no GitHub (por exemplo, para
+corrigir mensagens de commits antigos). Os commits ganham identificadores novos, e
+o `git pull` dá erro (*"divergent branches"*) ou tenta misturar os dois históricos.
+
+Nesse caso, no lugar do `git pull`, alinhe o PC com a versão do GitHub (backup antes,
+como sempre):
+
+```powershell
+cd C:\bicavi
+powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -Destino "$env:USERPROFILE\OneDrive\Bicavi-backups"
+git fetch
+git reset --hard origin/master
+docker compose pull db
+docker compose build --pull
+docker compose up -d
+```
+
+O `reset --hard` só troca os arquivos do projeto pelos do GitHub. O `.env` (que
+não é versionado) e o banco (que fica no volume do Docker) não são afetados.
+Depois disso, as próximas atualizações voltam a usar o `git pull` normalmente.
+
+> Nunca edite arquivos do projeto direto no PC de casa: o `reset --hard`
+> descartaria essas alterações.
+
 ### Se a versão nova quebrou algo
 
 1. Volte o código para o commit que você anotou:
