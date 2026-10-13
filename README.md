@@ -10,7 +10,7 @@
 ![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 
-<img src="docs/images/demo.webp" alt="Demonstração: login, resumo do mês, nova despesa, filtro por fatura, próximo mês e cartões" width="300">
+<img src="docs/images/demo.webp" alt="Demonstração: login, resumo do mês, nova despesa parcelada, pagamento de fatura, próximos meses e tema escuro" width="100%">
 
 <sub>Dados fictícios · <a href="docs/images/demo.mp4">versão em MP4</a></sub>
 
@@ -25,12 +25,14 @@ sobrava. O Bicavi faz isso pelo celular: cada um lança o que entrou e o que sai
 e o saldo do mês aparece na hora. Também dá para **planejar os meses seguintes**,
 lançando salários e parcelas do cartão com antecedência.
 
-- **Resumo do mês:** saldo, receitas, despesas e gastos por categoria
-- **Lançamento rápido:** Pix, dinheiro, débito, crédito ou boleto
-- **Cartões e faturas:** tocar numa fatura filtra as compras do cartão
-- **Parcelas:** de 2x a 24x, editando só uma ou ela e as seguintes
-- **Períodos:** meses futuros livres, o anterior editável até o dia 5 e os antigos somente leitura
-- **PWA:** instala no iPhone, tem tema claro e escuro e troca de mês com um deslizar
+| # | Funcionalidade | O que resolve |
+|---|---|---|
+| 01 | **Acesso seguro** | Login com JWT stateless, senha em BCrypt e limite de tentativas por e-mail |
+| 02 | **Resumo do mês** | Saldo, receitas, despesas, gastos por categoria e quanto já foi pago ou falta pagar |
+| 03 | **Lançamento rápido** | Pix, dinheiro, débito, crédito ou boleto, com parcelamento de 2x a 24x |
+| 04 | **Cartões e faturas** | Tocar numa fatura filtra as compras do cartão; um toque marca a fatura inteira como paga |
+| 05 | **Planejamento** | Salários e parcelas lançados nos meses seguintes; o mês anterior fica editável até o dia 5 |
+| 06 | **PWA** | Instala no iPhone, tem tema claro e escuro e troca de mês com um deslizar |
 
 <br clear="right">
 
