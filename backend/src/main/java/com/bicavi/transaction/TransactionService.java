@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,13 +29,15 @@ public class TransactionService {
     private final CategoryRepository categories;
     private final CardRepository cards;
     private final PeriodPolicy period;
+    private final Clock clock;
 
     public TransactionService(TransactionRepository transactions, CategoryRepository categories,
-                              CardRepository cards, PeriodPolicy period) {
+                              CardRepository cards, PeriodPolicy period, Clock clock) {
         this.transactions = transactions;
         this.categories = categories;
         this.cards = cards;
         this.period = period;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +135,22 @@ public class TransactionService {
             // Mantém valor, tipo e data da própria parcela; as regras de validação são as mesmas.
             next.update(category, next.getAmount(), next.getType(), request.paymentMethod(), card, description,
                     next.getOccurredOn());
+        }
+        return TransactionResponse.from(tx);
+    }
+
+    // Marca (paid = true, com a data de hoje) ou desmarca o pagamento.
+    // Mexe só no pagamento: não precisa reenviar a despesa inteira, e numa
+    // parcela vale só para ela (cada parcela é paga num mês diferente).
+    // Segue a mesma regra de período das outras alterações.
+    @Transactional
+    public TransactionResponse setPaid(Long userId, Long id, boolean paid) {
+        Transaction tx = findOrThrow(userId, id);
+        period.checkEditable(tx.getOccurredOn());
+        if (paid) {
+            tx.markPaid(LocalDate.now(clock));
+        } else {
+            tx.markUnpaid();
         }
         return TransactionResponse.from(tx);
     }

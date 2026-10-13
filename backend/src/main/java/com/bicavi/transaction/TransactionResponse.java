@@ -17,6 +17,7 @@ public record TransactionResponse(
         String categoryName,
         String description,
         LocalDate occurredOn,
+        LocalDate paidOn,           // null se não paga (receitas: sempre null)
         Integer installmentNumber,  // null se não for parcela
         Integer installmentCount    // null se não for parcela
 ) {
@@ -35,6 +36,7 @@ public record TransactionResponse(
                 category == null ? null : category.getName(),
                 tx.getDescription(),
                 tx.getOccurredOn(),
+                tx.getPaidOn(),
                 tx.getInstallmentNumber(),
                 tx.getInstallmentCount());
     }

@@ -64,6 +64,10 @@ public class Transaction {
     @Column(name = "occurred_on", nullable = false)
     private LocalDate occurredOn;
 
+    // Quando a despesa foi paga (null = não paga). Só despesas; ver markPaid().
+    @Column(name = "paid_on")
+    private LocalDate paidOn;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -138,6 +142,29 @@ public class Transaction {
         this.card = card;
         this.description = description;
         this.occurredOn = occurredOn;
+        // Despesa paga que virou receita: "paga" deixa de fazer sentido
+        // (e o CHECK do banco, V10, recusaria a linha).
+        if (type != TransactionType.EXPENSE) {
+            this.paidOn = null;
+        }
+    }
+
+    // Marcar de novo uma despesa já paga mantém a data original do pagamento.
+    public void markPaid(LocalDate date) {
+        if (type != TransactionType.EXPENSE) {
+            throw new BusinessRuleException("Só despesas podem ser marcadas como pagas");
+        }
+        if (paidOn == null) {
+            paidOn = date;
+        }
+    }
+
+    public void markUnpaid() {
+        paidOn = null;
+    }
+
+    public boolean isPaid() {
+        return paidOn != null;
     }
 
     private static void validate(Category category, BigDecimal amount, TransactionType type,
@@ -210,6 +237,10 @@ public class Transaction {
 
     public LocalDate getOccurredOn() {
         return occurredOn;
+    }
+
+    public LocalDate getPaidOn() {
+        return paidOn;
     }
 
     public Instant getCreatedAt() {

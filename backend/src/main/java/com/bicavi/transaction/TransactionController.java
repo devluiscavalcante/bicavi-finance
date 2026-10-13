@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -64,6 +65,14 @@ public class TransactionController {
                                       @Valid @RequestBody TransactionRequest request,
                                       @RequestParam(defaultValue = "THIS") EditScope scope) {
         return service.update(CurrentUser.id(jwt), id, request, scope);
+    }
+
+    // PATCH /api/transactions/5/payment  {"paid": true}
+    // PATCH (e não PUT): altera só uma parte da transação, o pagamento.
+    @PatchMapping("/{id}/payment")
+    public TransactionResponse setPaid(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                       @Valid @RequestBody PaymentRequest request) {
+        return service.setPaid(CurrentUser.id(jwt), id, request.paid());
     }
 
     @DeleteMapping("/{id}")

@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -55,7 +56,7 @@ class TransactionControllerTest {
     @Test
     void listParsesMonthAndPassesLoggedUser() throws Exception {
         when(service.list(USER, YearMonth.of(2026, 10), 3L)).thenReturn(List.of(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6), null, null)));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, 3L, "Mercado", "Feira", LocalDate.of(2026, 10, 6), null, null, null)));
 
         mockMvc.perform(get("/api/transactions").with(loggedUser()).param("month", "2026-10").param("categoryId", "3"))
                 .andExpect(status().isOk())
@@ -86,7 +87,7 @@ class TransactionControllerTest {
     @Test
     void createReturns201() throws Exception {
         when(service.create(eq(USER), any())).thenReturn(new TransactionResponse(
-                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, null, null, LocalDate.of(2026, 10, 6), null, null));
+                1L, new BigDecimal("35.90"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, null, null, null, LocalDate.of(2026, 10, 6), null, null, null));
 
         mockMvc.perform(post("/api/transactions").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -104,9 +105,9 @@ class TransactionControllerTest {
     void createInstallmentsReturns201WithAllParts() throws Exception {
         when(service.createInstallments(eq(USER), any())).thenReturn(List.of(
                 new TransactionResponse(1L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null,
-                        null, null, "TV", LocalDate.of(2026, 11, 10), 1, 2),
+                        null, null, "TV", LocalDate.of(2026, 11, 10), null, 1, 2),
                 new TransactionResponse(2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null,
-                        null, null, "TV", LocalDate.of(2026, 12, 10), 2, 2)));
+                        null, null, "TV", LocalDate.of(2026, 12, 10), null, 2, 2)));
 
         mockMvc.perform(post("/api/transactions/installments").with(loggedUser())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -141,7 +142,7 @@ class TransactionControllerTest {
     void updatePassesScopeFromQueryParameter() throws Exception {
         when(service.update(eq(USER), eq(2L), any(), eq(EditScope.FOLLOWING))).thenReturn(new TransactionResponse(
                 2L, new BigDecimal("50.00"), TransactionType.EXPENSE, PaymentMethod.CREDITO, null, null, null, null, "TV",
-                LocalDate.of(2026, 12, 10), 2, 2));
+                LocalDate.of(2026, 12, 10), null, 2, 2));
 
         mockMvc.perform(put("/api/transactions/2").with(loggedUser()).param("scope", "FOLLOWING")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -202,5 +203,33 @@ class TransactionControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Categoria 99 não existe"));
+    }
+
+    @Test
+    void markPaidPassesLoggedUserAndFlag() throws Exception {
+        when(service.setPaid(USER, 5L, true)).thenReturn(new TransactionResponse(
+                5L, new BigDecimal("300.00"), TransactionType.EXPENSE, PaymentMethod.BOLETO, null, null, null, null,
+                "Plano de saúde", LocalDate.of(2026, 11, 10), LocalDate.of(2026, 10, 13), null, null));
+
+        mockMvc.perform(patch("/api/transactions/5/payment").with(loggedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"paid": true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paidOn").value("2026-10-13"));
+
+        verify(service).setPaid(USER, 5L, true);
+    }
+
+    @Test
+    void paymentWithoutPaidFieldReturns400() throws Exception {
+        // Sem o campo, nada de "false" implícito: é erro do cliente.
+        mockMvc.perform(patch("/api/transactions/5/payment").with(loggedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.paid").exists());
+        verifyNoInteractions(service);
     }
 }

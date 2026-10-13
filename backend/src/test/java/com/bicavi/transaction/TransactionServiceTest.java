@@ -54,7 +54,8 @@ class TransactionServiceTest {
 
     @BeforeEach
     void createService() {
-        service = new TransactionService(transactions, categories, cards, new PeriodPolicy(TestClocks.at(DAY)));
+        service = new TransactionService(transactions, categories, cards, new PeriodPolicy(TestClocks.at(DAY)),
+                TestClocks.at(DAY));
     }
 
     @Test
@@ -419,5 +420,43 @@ class TransactionServiceTest {
         when(transactions.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(ancient));
 
         assertThatThrownBy(() -> service.get(USER, 1L)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void setPaidMarksWithTodaysDate() {
+        Transaction bill = expense("300.00").on(LocalDate.of(2026, 11, 10)).build();
+        when(transactions.findByIdAndUserId(5L, USER)).thenReturn(Optional.of(bill));
+
+        TransactionResponse response = service.setPaid(USER, 5L, true);
+
+        // Conta de novembro paga hoje (06/10): a data é a do pagamento, não a da conta.
+        assertThat(response.paidOn()).isEqualTo(DAY);
+    }
+
+    @Test
+    void setPaidFalseClearsThePayment() {
+        Transaction bill = expense("300.00").build();
+        bill.markPaid(DAY);
+        when(transactions.findByIdAndUserId(5L, USER)).thenReturn(Optional.of(bill));
+
+        assertThat(service.setPaid(USER, 5L, false).paidOn()).isNull();
+    }
+
+    @Test
+    void setPaidRejectsClosedMonth() {
+        Transaction old = expense("300.00").on(CLOSED_DAY).build();
+        when(transactions.findByIdAndUserId(5L, USER)).thenReturn(Optional.of(old));
+
+        assertThatThrownBy(() -> service.setPaid(USER, 5L, true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("fechado");
+        assertThat(old.isPaid()).isFalse();
+    }
+
+    @Test
+    void setPaidOnTransactionOfAnotherUserIsNotFound() {
+        when(transactions.findByIdAndUserId(5L, USER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setPaid(USER, 5L, true)).isInstanceOf(NotFoundException.class);
     }
 }

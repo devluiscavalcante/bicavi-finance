@@ -94,4 +94,48 @@ class TransactionTest {
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Mercado");
     }
+
+    @Test
+    void newExpenseStartsUnpaid() {
+        assertThat(expense("10.00").build().isPaid()).isFalse();
+    }
+
+    @Test
+    void markingPaidTwiceKeepsTheFirstDate() {
+        Transaction tx = expense("10.00").build();
+
+        tx.markPaid(TODAY);
+        tx.markPaid(TODAY.plusDays(3));
+
+        assertThat(tx.getPaidOn()).isEqualTo(TODAY);
+    }
+
+    @Test
+    void incomeCannotBeMarkedPaid() {
+        Transaction salary = income("5000.00").build();
+
+        assertThatThrownBy(() -> salary.markPaid(TODAY))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Só despesas podem ser marcadas como pagas");
+    }
+
+    @Test
+    void paidExpenseChangedToIncomeLosesThePayment() {
+        Transaction tx = expense("10.00").build();
+        tx.markPaid(TODAY);
+
+        tx.update(null, new BigDecimal("10.00"), TransactionType.INCOME, null, null, null, TODAY);
+
+        assertThat(tx.isPaid()).isFalse();
+    }
+
+    @Test
+    void editingAPaidExpenseKeepsItPaid() {
+        Transaction tx = expense("10.00").build();
+        tx.markPaid(TODAY);
+
+        tx.update(null, new BigDecimal("12.00"), TransactionType.EXPENSE, PaymentMethod.PIX, null, null, TODAY);
+
+        assertThat(tx.getPaidOn()).isEqualTo(TODAY);
+    }
 }

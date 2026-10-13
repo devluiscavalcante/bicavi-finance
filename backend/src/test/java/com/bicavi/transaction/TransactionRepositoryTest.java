@@ -17,15 +17,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 import static com.bicavi.transaction.TestTransactions.expense;
+import static com.bicavi.transaction.TestTransactions.income;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -324,6 +328,46 @@ class TransactionRepositoryTest {
                 """, alice, DAY))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_transactions_installment");
+    }
+
+    @Test
+    void savesAndReadsPaidOn() {
+        Transaction bill = expense("300.00").user(alice).build();
+        bill.markPaid(DAY);
+        Long id = transactions.save(bill).getId();
+        flushAndClear();
+
+        assertThat(transactions.findByIdAndUserId(id, alice).orElseThrow().getPaidOn()).isEqualTo(DAY);
+    }
+
+    @Test
+    void databaseRejectsPaidIncome() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, amount, type, occurred_on, created_at, paid_on)
+                VALUES (?, 5000, 'INCOME', ?, now(), ?)
+                """, alice, DAY, DAY))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_transactions_paid_only_expense");
+    }
+
+    // A V10 já rodou com o banco vazio. Aqui rodamos o UPDATE dela de novo com
+    // dados, simulando o banco de produção no momento da migration.
+    @Test
+    void migrationMarksOnlyExpensesBeforeOctober2026AsPaid() throws IOException {
+        Long september = saveExpense(alice, null, "setembro", LocalDate.of(2026, 9, 30));
+        Long october = saveExpense(alice, null, "outubro", OCT_1);
+        Long salary = transactions.save(income("5000.00").user(alice).on(LocalDate.of(2026, 9, 5)).build()).getId();
+        flushAndClear();
+
+        String sql = new ClassPathResource("db/migration/V10__add_paid_on.sql").getContentAsString(StandardCharsets.UTF_8);
+        // Só o UPDATE: o ALTER TABLE falharia (a coluna já existe).
+        jdbc.execute(sql.substring(sql.indexOf("UPDATE")));
+
+        // A data do pagamento é a da própria despesa (a verdadeira não é conhecida).
+        assertThat(transactions.findByIdAndUserId(september, alice).orElseThrow().getPaidOn())
+                .isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(transactions.findByIdAndUserId(october, alice).orElseThrow().isPaid()).isFalse();
+        assertThat(transactions.findByIdAndUserId(salary, alice).orElseThrow().isPaid()).isFalse();
     }
 
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
