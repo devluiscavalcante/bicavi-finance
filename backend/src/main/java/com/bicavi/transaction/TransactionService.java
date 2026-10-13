@@ -147,12 +147,36 @@ public class TransactionService {
     public TransactionResponse setPaid(Long userId, Long id, boolean paid) {
         Transaction tx = findOrThrow(userId, id);
         period.checkEditable(tx.getOccurredOn());
+        applyPayment(tx, paid, LocalDate.now(clock));
+        return TransactionResponse.from(tx);
+    }
+
+    // Paga (ou desmarca) a fatura inteira: todas as compras do cartão no mês.
+    // Uma única transação de banco: ou todas mudam, ou nenhuma.
+    // Compras no crédito antigas, sem cartão, não têm fatura para endereçar:
+    // essas são marcadas uma a uma.
+    @Transactional
+    public List<TransactionResponse> setInvoicePaid(Long userId, Long cardId, YearMonth month, boolean paid) {
+        // Aqui o recurso da URL é o cartão: de outro usuário ou inexistente = 404.
+        if (cards.findByIdAndUserId(cardId, userId).isEmpty()) {
+            throw new NotFoundException("Cartão " + cardId + " não encontrado");
+        }
+        period.checkEditable(month.atDay(1));
+        LocalDate today = LocalDate.now(clock);
+        List<Transaction> purchases = transactions.findCardPurchasesInPeriod(
+                userId, cardId, month.atDay(1), month.plusMonths(1).atDay(1));
+        purchases.forEach(tx -> applyPayment(tx, paid, today));
+        return purchases.stream()
+                .map(TransactionResponse::from)
+                .toList();
+    }
+
+    private static void applyPayment(Transaction tx, boolean paid, LocalDate today) {
         if (paid) {
-            tx.markPaid(LocalDate.now(clock));
+            tx.markPaid(today);
         } else {
             tx.markUnpaid();
         }
-        return TransactionResponse.from(tx);
     }
 
     @Transactional

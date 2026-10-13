@@ -459,4 +459,49 @@ class TransactionServiceTest {
 
         assertThatThrownBy(() -> service.setPaid(USER, 5L, true)).isInstanceOf(NotFoundException.class);
     }
+
+    @Test
+    void setInvoicePaidMarksEveryPurchaseOfTheCardInTheMonth() {
+        YearMonth november = YearMonth.of(2026, 11);
+        Transaction tv = expense("100.00").credit(NUBANK).on(LocalDate.of(2026, 11, 10)).build();
+        Transaction food = expense("30.00").credit(NUBANK).on(LocalDate.of(2026, 11, 10)).build();
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.of(NUBANK));
+        when(transactions.findCardPurchasesInPeriod(USER, CARD_ID, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1)))
+                .thenReturn(List.of(tv, food));
+
+        List<TransactionResponse> result = service.setInvoicePaid(USER, CARD_ID, november, true);
+
+        assertThat(result).extracting(TransactionResponse::paidOn).containsOnly(DAY);
+    }
+
+    @Test
+    void setInvoicePaidFalseClearsEveryPurchase() {
+        Transaction tv = expense("100.00").credit(NUBANK).build();
+        tv.markPaid(DAY);
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.of(NUBANK));
+        when(transactions.findCardPurchasesInPeriod(any(), any(), any(), any())).thenReturn(List.of(tv));
+
+        service.setInvoicePaid(USER, CARD_ID, YearMonth.of(2026, 10), false);
+
+        assertThat(tv.isPaid()).isFalse();
+    }
+
+    @Test
+    void setInvoicePaidWithCardOfAnotherUserIsNotFound() {
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setInvoicePaid(USER, CARD_ID, YearMonth.of(2026, 10), true))
+                .isInstanceOf(NotFoundException.class);
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void setInvoicePaidRejectsClosedMonth() {
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.of(NUBANK));
+
+        assertThatThrownBy(() -> service.setInvoicePaid(USER, CARD_ID, YearMonth.of(2026, 9), true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("fechado");
+        verifyNoInteractions(transactions);
+    }
 }

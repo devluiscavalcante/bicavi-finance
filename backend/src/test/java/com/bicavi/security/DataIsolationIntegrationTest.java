@@ -18,6 +18,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -138,6 +139,30 @@ class DataIsolationIntegrationTest {
                                 """.formatted(aliceCardId, today)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Cartão " + aliceCardId + " não existe"));
+    }
+
+    @Test
+    void bobCannotPayAlicesTransactionOrInvoice() throws Exception {
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
+                {"name": "Nubank"}
+                """);
+        String paid = """
+                {"paid": true}
+                """;
+
+        mockMvc.perform(patch("/api/transactions/" + aliceTransactionId + "/payment")
+                        .header("Authorization", bearer(bobToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(paid))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(patch("/api/cards/" + aliceCardId + "/invoices/" + month + "/payment")
+                        .header("Authorization", bearer(bobToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(paid))
+                .andExpect(status().isNotFound());
+
+        // A despesa da Alice continua não paga.
+        mockMvc.perform(get("/api/transactions/" + aliceTransactionId).header("Authorization", bearer(aliceToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paidOn").doesNotExist());
     }
 
     @Test

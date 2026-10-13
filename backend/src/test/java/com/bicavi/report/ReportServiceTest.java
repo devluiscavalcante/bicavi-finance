@@ -117,6 +117,8 @@ class ReportServiceTest {
         assertThat(summary.totalIncome()).isEqualTo(new BigDecimal("0.00"));
         assertThat(summary.totalExpense()).isEqualTo(new BigDecimal("0.00"));
         assertThat(summary.balance()).isEqualTo(new BigDecimal("0.00"));
+        assertThat(summary.totalPaid()).isEqualTo(new BigDecimal("0.00"));
+        assertThat(summary.totalToPay()).isEqualTo(new BigDecimal("0.00"));
         assertThat(summary.expensesByCategory()).isEmpty();
         assertThat(summary.expensesByCard()).isEmpty();
     }
@@ -195,5 +197,41 @@ class ReportServiceTest {
 
     private static Transaction expense(Category category, String amount) {
         return TestTransactions.expense(amount).category(category).build();
+    }
+
+    @Test
+    void splitsExpensesIntoPaidAndToPay() {
+        givenOctoberTransactions(
+                paid(expense(groceries, "100.00")),
+                expense(transport, "30.00"),
+                paid(credit(groceries, nubank, "50.00")),
+                income(salary, "5000.00")); // receita não entra em pago nem em a pagar
+
+        MonthlySummaryResponse summary = service.monthlySummary(USER, OCTOBER);
+
+        assertThat(summary.totalPaid()).isEqualByComparingTo("150.00");
+        assertThat(summary.totalToPay()).isEqualByComparingTo("30.00");
+        // Pagar não muda o total do mês nem o saldo: a despesa continua existindo.
+        assertThat(summary.totalExpense()).isEqualByComparingTo("180.00");
+        assertThat(summary.balance()).isEqualByComparingTo("4820.00");
+    }
+
+    @Test
+    void invoiceShowsWhatIsLeftToPay() {
+        givenOctoberTransactions(
+                paid(credit(groceries, nubank, "100.00")),
+                credit(transport, nubank, "30.00"),
+                paid(credit(groceries, itau, "50.00")));
+
+        List<CardTotal> byCard = service.monthlySummary(USER, OCTOBER).expensesByCard();
+
+        assertThat(byCard).extracting(CardTotal::toPay)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("30.00"), new BigDecimal("0.00"));  // Itaú: fatura paga
+    }
+
+    private static Transaction paid(Transaction tx) {
+        tx.markPaid(DAY);
+        return tx;
     }
 }

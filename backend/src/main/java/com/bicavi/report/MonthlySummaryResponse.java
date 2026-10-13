@@ -8,6 +8,8 @@ public record MonthlySummaryResponse(
         YearMonth month,
         BigDecimal totalIncome,
         BigDecimal totalExpense,
+        BigDecimal totalPaid,                   // despesas já pagas
+        BigDecimal totalToPay,                  // despesas ainda não pagas (pago + a pagar = totalExpense)
         BigDecimal balance,                     // receitas - despesas (pode ser negativo)
         List<CategoryTotal> expensesByCategory, // do maior gasto para o menor
         List<CardTotal> expensesByCard          // faturas do mês, da maior para a menor

@@ -43,4 +43,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             ORDER BY t.installmentNumber
             """)
     List<Transaction> findFollowingInstallments(Long userId, UUID group, Integer number);
+
+    // Compras de um cartão no mês, ou seja, a fatura. Não filtra forma de
+    // pagamento: o CHECK da V8 já garante que só compra no crédito tem cartão.
+    @Query("""
+            SELECT t FROM Transaction t
+            JOIN FETCH t.card k
+            LEFT JOIN FETCH t.category
+            WHERE t.userId = :userId
+              AND k.id = :cardId
+              AND t.occurredOn >= :start AND t.occurredOn < :end
+            ORDER BY t.occurredOn DESC, t.id DESC
+            """)
+    List<Transaction> findCardPurchasesInPeriod(Long userId, Long cardId, LocalDate start, LocalDate end);
 }

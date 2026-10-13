@@ -45,11 +45,14 @@ public class ReportService {
 
         BigDecimal income = sum(all, TransactionType.INCOME);
         BigDecimal expense = sum(all, TransactionType.EXPENSE);
+        BigDecimal toPay = sumUnpaid(all);
 
         return new MonthlySummaryResponse(
                 month,
                 income,
                 expense,
+                expense.subtract(toPay),
+                toPay,
                 income.subtract(expense),
                 expensesByCategory(all),
                 expensesByCard(all));
@@ -60,6 +63,11 @@ public class ReportService {
                 .filter(tx -> tx.getType() == type)
                 .map(Transaction::getAmount)
                 .reduce(ZERO, BigDecimal::add);
+    }
+
+    // Despesas ainda não pagas. Receitas nunca têm pagamento, então ficam de fora.
+    private static BigDecimal sumUnpaid(List<Transaction> all) {
+        return sum(all.stream().filter(tx -> !tx.isPaid()).toList(), TransactionType.EXPENSE);
     }
 
     private static List<CategoryTotal> expensesByCategory(List<Transaction> all) {
@@ -91,7 +99,8 @@ public class ReportService {
                 .map(entry -> new CardTotal(
                         entry.getKey().id(),
                         entry.getKey().name(),
-                        entry.getValue().stream().map(Transaction::getAmount).reduce(ZERO, BigDecimal::add),
+                        sum(entry.getValue(), TransactionType.EXPENSE),
+                        sumUnpaid(entry.getValue()),
                         entry.getValue().size()))
                 .sorted(Comparator.comparing(CardTotal::total).reversed()
                         .thenComparing(CardTotal::cardName))

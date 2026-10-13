@@ -370,6 +370,22 @@ class TransactionRepositoryTest {
         assertThat(transactions.findByIdAndUserId(salary, alice).orElseThrow().isPaid()).isFalse();
     }
 
+    @Test
+    void findCardPurchasesInPeriodReturnsOnlyThatCardInThatMonth() {
+        Card other = cards.save(new Card(alice, "Itaú"));
+        transactions.save(expense("10.00").user(alice).credit(aliceCard).description("fatura").on(DAY).build());
+        transactions.save(expense("20.00").user(alice).credit(aliceCard).description("novembro").on(NOV_1).build());
+        transactions.save(expense("30.00").user(alice).credit(other).description("outro cartão").on(DAY).build());
+        transactions.save(expense("40.00").user(alice).description("pix").on(DAY).build());
+        flushAndClear();
+
+        List<Transaction> invoice = transactions.findCardPurchasesInPeriod(alice, aliceCard.getId(), OCT_1, NOV_1);
+
+        assertThat(invoice).extracting(Transaction::getDescription).containsExactly("fatura");
+        // O cartão é do usuário: bob, com o mesmo id de cartão, não vê nada.
+        assertThat(transactions.findCardPurchasesInPeriod(bob, aliceCard.getId(), OCT_1, NOV_1)).isEmpty();
+    }
+
     private Long saveExpense(Long userId, Category category, String description, LocalDate day) {
         return transactions.save(expense("10.00").user(userId).category(category).description(description).on(day).build()).getId();
     }
