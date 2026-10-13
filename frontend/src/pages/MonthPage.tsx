@@ -4,7 +4,9 @@ import { api, ApiError, clearToken } from '../api'
 import { addMonths, currentMonth, formatMonth, isValidMonth, monthOf, todayIso } from '../format'
 import { ChevronLeft, ChevronRight, LogOut, Plus, Tag } from '../icons'
 import { TransactionSheet } from '../TransactionSheet'
-import type { CardTotal, MonthlySummaryResponse, PeriodResponse, TransactionResponse, UserResponse } from '../types'
+import type {
+  CardTotal, MonthlySummaryResponse, PaymentRequest, PeriodResponse, TransactionResponse, UserResponse,
+} from '../types'
 import { CategoryBreakdown } from './month/CategoryBreakdown'
 import { InvoicesCard } from './month/InvoicesCard'
 import { MonthHero } from './month/MonthHero'
@@ -186,6 +188,7 @@ export function MonthPage() {
             filter={filter}
             onFilterChange={setFilter}
             onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
+            onChanged={() => setReloadKey(k => k + 1)}
           />
         )}
       </div>
@@ -223,17 +226,48 @@ function MonthSkeleton() {
 // Conteúdo do mês já carregado. Coordena o que é compartilhado entre os blocos:
 // a fatura escolhida aparece selecionada nas faturas E filtra a lista.
 // Cada bloco cuida do próprio estado ("Ver todas", "Ver mais").
-function MonthContent({ data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect }: {
+function MonthContent({
+  data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect, onChanged,
+}: {
   data: MonthData
   highlightId: number | null
   editable: boolean
   filter: Filter
   onFilterChange: (f: Filter) => void
   onSelect: (tx: TransactionResponse) => void
+  onChanged: () => void // algo mudou no backend: a tela busca o mês de novo
 }) {
   // Fatura tocada: a lista mostra só as compras daquele cartão (para conferir com o banco).
   const [cardFilter, setCardFilter] = useState<CardTotal | null>(null)
   const listRef = useRef<HTMLElement>(null)
+  // Pagamento sendo marcado: trava os círculos até a resposta (evita o toque duplo).
+  const [paying, setPaying] = useState(false)
+  const [payError, setPayError] = useState<string | null>(null)
+
+  // Marca ou desmarca e busca o mês de novo: os totais (pago, a pagar, faturas)
+  // vêm recalculados da API, o frontend não soma nada.
+  async function sendPayment(path: string, paid: boolean) {
+    setPaying(true)
+    setPayError(null)
+    try {
+      const body: PaymentRequest = { paid }
+      await api(path, { method: 'PATCH', body: JSON.stringify(body) })
+      onChanged()
+    } catch (e) {
+      setPayError(e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor')
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  function toggleTransactionPaid(tx: TransactionResponse) {
+    sendPayment(`/api/transactions/${tx.id}/payment`, tx.paidOn === null)
+  }
+
+  // Fatura com algo a pagar: paga tudo. Já paga: desmarca tudo.
+  function toggleInvoicePaid(invoice: CardTotal) {
+    sendPayment(`/api/cards/${invoice.cardId}/invoices/${summary.month}/payment`, invoice.toPay > 0)
+  }
 
   // Trocar o filtro de tipo desfaz o filtro de fatura.
   function changeFilter(f: Filter) {
@@ -255,7 +289,9 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
     <>
       <MonthHero summary={summary} />
       <CategoryBreakdown categories={summary.expensesByCategory} totalExpense={summary.totalExpense} />
-      <InvoicesCard invoices={summary.expensesByCard} selected={cardFilter} onToggle={toggleCardFilter} />
+      {payError && <p className="error" role="alert" style={{ marginTop: 16 }}>{payError}</p>}
+      <InvoicesCard invoices={summary.expensesByCard} selected={cardFilter} onToggle={toggleCardFilter}
+                    editable={editable} busy={paying} onTogglePaid={toggleInvoicePaid} />
       <TransactionList
         transactions={transactions}
         filter={filter}
@@ -266,6 +302,8 @@ function MonthContent({ data: { summary, transactions }, highlightId, editable, 
         editable={editable}
         onSelect={onSelect}
         sectionRef={listRef}
+        busy={paying}
+        onTogglePaid={toggleTransactionPaid}
       />
     </>
   )

@@ -2,7 +2,8 @@ import { formatMoney } from '../../format'
 import { ArrowDown, ArrowUp } from '../../icons'
 import type { MonthlySummaryResponse } from '../../types'
 
-// Saldo do mês em destaque, com o total de receitas e de despesas.
+// Saldo do mês em destaque, com o total de receitas e de despesas
+// e quanto das despesas já foi pago.
 export function MonthHero({ summary }: { summary: MonthlySummaryResponse }) {
   return (
     <section className="hero reveal">
@@ -26,6 +27,18 @@ export function MonthHero({ summary }: { summary: MonthlySummaryResponse }) {
           </div>
         </div>
       </div>
+      {summary.totalExpense > 0 && (
+        <div className="hero-paid">
+          <div className="hero-paid-bar">
+            {/* Proporção só para a largura; os valores exibidos vêm prontos da API. */}
+            <span style={{ width: `${(summary.totalPaid / summary.totalExpense) * 100}%` }} />
+          </div>
+          <div className="hero-paid-labels">
+            <small>Pago <strong>{formatMoney(summary.totalPaid)}</strong></small>
+            <small>A pagar <strong>{formatMoney(summary.totalToPay)}</strong></small>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

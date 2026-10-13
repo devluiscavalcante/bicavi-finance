@@ -30,6 +30,7 @@ export interface TransactionResponse {
   categoryName: string | null
   description: string | null
   occurredOn: string // "2026-10-07"
+  paidOn: string | null // data do pagamento; null = a pagar (receitas: sempre null)
   installmentNumber: number | null // parcela 2 de 3 -> 2; null se não for parcela
   installmentCount: number | null // parcela 2 de 3 -> 3
 }
@@ -49,6 +50,7 @@ export interface CardTotal {
   cardId: number | null // null = compras no crédito antigas, sem cartão
   cardName: string
   total: number
+  toPay: number // compras ainda não pagas; 0 = fatura paga
   purchases: number
 }
 
@@ -56,6 +58,8 @@ export interface MonthlySummaryResponse {
   month: string // "2026-10"
   totalIncome: number
   totalExpense: number
+  totalPaid: number // despesas já pagas
+  totalToPay: number // despesas a pagar (pago + a pagar = totalExpense)
   balance: number
   expensesByCategory: CategoryTotal[]
   expensesByCard: CardTotal[] // da maior fatura para a menor
@@ -90,6 +94,11 @@ export interface InstallmentRequest {
   categoryId: number | null
   description: string | null
   firstDate: string // data da 1ª parcela; as demais nos meses seguintes
+}
+
+// Corpo do PATCH .../payment (despesa ou fatura inteira).
+export interface PaymentRequest {
+  paid: boolean
 }
 
 // Corpo do POST /api/transactions.

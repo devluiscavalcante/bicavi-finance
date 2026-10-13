@@ -1,8 +1,9 @@
 import { useState, type RefObject } from 'react'
-import { formatDayHeading, formatMoney, formatPaymentMethod, transactionTitle } from '../../format'
+import { formatDay, formatDayHeading, formatMoney, formatPaymentMethod, transactionTitle } from '../../format'
 import { ArrowDown, ArrowUp, Close, Wallet } from '../../icons'
 import { groupByDay } from '../../lists'
 import type { CardTotal, TransactionResponse, TransactionType } from '../../types'
+import { PayToggle } from './PayToggle'
 
 export type Filter = 'ALL' | TransactionType
 
@@ -19,6 +20,7 @@ const TX_PAGE = 5
 // Os filtros vêm de fora (a tela também mostra as faturas); o "Ver mais" é só daqui.
 export function TransactionList({
   transactions, filter, onFilterChange, cardFilter, onClearCardFilter, highlightId, editable, onSelect, sectionRef,
+  busy, onTogglePaid,
 }: {
   transactions: TransactionResponse[]
   filter: Filter
@@ -29,6 +31,8 @@ export function TransactionList({
   editable: boolean
   onSelect: (tx: TransactionResponse) => void
   sectionRef: RefObject<HTMLElement | null> // a tela rola até aqui ao escolher uma fatura
+  busy: boolean // marcando pagamento: os círculos ficam travados até a resposta
+  onTogglePaid: (tx: TransactionResponse) => void
 }) {
   const [txLimit, setTxLimit] = useState(TX_PAGE)
   // Último destaque já revelado (ver abaixo).
@@ -119,7 +123,7 @@ export function TransactionList({
                 const index = rowIndex++
                 const delay = index < TX_PAGE ? 200 + index * 40 : (index % TX_PAGE) * 40
                 return (
-                  <li key={tx.id} className={tx.id === highlightId ? 'reveal just-added' : 'reveal'}
+                  <li key={tx.id} className={tx.id === highlightId ? 'tx-line reveal just-added' : 'tx-line reveal'}
                       style={{ animationDelay: `${delay}ms` }}>
                     {/* Mês aberto: a linha é um <button> (teclado e leitor de tela funcionam).
                         Mês fechado: só texto, nada para clicar. */}
@@ -129,6 +133,17 @@ export function TransactionList({
                       </button>
                     ) : (
                       <div className="tx-row"><TransactionRow tx={tx} /></div>
+                    )}
+                    {/* Ao lado da linha, e não dentro: um <button> não pode conter outro. */}
+                    {tx.type === 'EXPENSE' && (
+                      <PayToggle
+                        paid={tx.paidOn !== null}
+                        label={tx.paidOn !== null ? `Desmarcar pagamento de ${transactionTitle(tx)}`
+                          : `Marcar ${transactionTitle(tx)} como paga`}
+                        title={tx.paidOn !== null ? `Paga em ${formatDay(tx.paidOn)}` : undefined}
+                        busy={busy}
+                        onToggle={editable ? () => onTogglePaid(tx) : undefined}
+                      />
                     )}
                   </li>
                 )
@@ -167,7 +182,7 @@ function TransactionRow({ tx }: { tx: TransactionResponse }) {
           {tx.cardName && ` · ${tx.cardName}`}
         </small>
       </div>
-      <span className={`tx-amount ${kind}`}>
+      <span className={tx.paidOn !== null ? `tx-amount ${kind} paid` : `tx-amount ${kind}`}>
         {tx.type === 'INCOME' ? '+' : '−'} {formatMoney(tx.amount)}
       </span>
     </>
