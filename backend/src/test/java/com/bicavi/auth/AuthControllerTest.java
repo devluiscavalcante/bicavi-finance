@@ -120,6 +120,21 @@ class AuthControllerTest {
         verifyNoInteractions(service);
     }
 
+    @Test
+    void loginWithOversizedEmailReturns400WithoutReachingTheService() throws Exception {
+        String email = "a".repeat(10_000) + "@example.com";
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "%s", "password": "senha-forte-123"}
+                                """.formatted(email)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email").exists());
+        // Nem chega ao service, logo nem ao LoginRateLimiter: nenhum balde é criado.
+        verifyNoInteractions(service);
+    }
+
     // permitAll não ignora o header: se veio um Bearer, o Spring Security o valida,
     // e um token inválido ou vencido dá 401 antes do controller. Por isso o
     // frontend não envia token para /api/auth/* (ver api.ts).
