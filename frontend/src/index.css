@@ -79,6 +79,13 @@
   box-sizing: border-box;
 }
 
+/* Sem o "quique" do iOS no topo/fim da página nem o puxar para atualizar nativo
+   do Chrome Android: o app tem o próprio gesto (PullToRefresh.tsx), e os dois
+   juntos brigariam pelo mesmo movimento do dedo. */
+html {
+  overscroll-behavior-y: none;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -678,6 +685,45 @@ button.tx-row:active {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ---------- Puxar para atualizar ---------- */
+
+/* Começa escondido acima da tela; o transform (vindo do componente) o traz
+   para baixo junto com o dedo. */
+.ptr {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) - 40px);
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  pointer-events: none;
+}
+
+.ptr-icon {
+  display: grid;
+}
+
+.ptr svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ptr-icon.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

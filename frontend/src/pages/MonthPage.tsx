@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import { addMonths, currentMonth, formatMonth, isValidMonth, monthOf, todayIso } from '../format'
 import { ChevronLeft, ChevronRight, LogOut, Plus, Tag } from '../icons'
+import { PullToRefresh } from '../PullToRefresh'
 import { TransactionSheet } from '../TransactionSheet'
 import type {
   CardTotal, MonthlySummaryResponse, PaymentRequest, PeriodResponse, TransactionResponse, UserResponse,
@@ -19,6 +20,20 @@ interface MonthData {
 
 // Resultado da última busca, junto com o mês a que ele pertence.
 type MonthResult = { month: string } & ({ data: MonthData } | { error: string })
+
+// Resumo e transações do mês. Nunca rejeita: um erro vira { error }.
+// As duas chamadas são independentes: Promise.all faz as duas ao mesmo tempo.
+function loadMonth(month: string): Promise<MonthResult> {
+  return Promise.all([
+    api<MonthlySummaryResponse>(`/api/reports/monthly-summary?month=${month}`),
+    api<TransactionResponse[]>(`/api/transactions?month=${month}`),
+  ])
+    .then(([summary, transactions]): MonthResult => ({ month, data: { summary, transactions } }))
+    .catch((e): MonthResult => ({
+      month,
+      error: e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor',
+    }))
+}
 
 // Painel fechado, aberto para criar, ou aberto editando uma transação.
 type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
@@ -71,23 +86,26 @@ export function MonthPage() {
     // DEPOIS da do mês novo. A flag descarta respostas de um mês que já saiu da tela.
     let ignore = false
 
-    // As duas chamadas são independentes: Promise.all faz as duas ao mesmo tempo.
-    Promise.all([
-      api<MonthlySummaryResponse>(`/api/reports/monthly-summary?month=${month}`),
-      api<TransactionResponse[]>(`/api/transactions?month=${month}`),
-    ])
-      .then(([summary, transactions]) => {
-        if (!ignore) setResult({ month, data: { summary, transactions } })
-      })
-      .catch(e => {
-        const error = e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor'
-        if (!ignore) setResult({ month, error })
-      })
+    loadMonth(month).then(loaded => {
+      if (!ignore) setResult(loaded)
+    })
 
     return () => {
       ignore = true
     }
   }, [month, reloadKey])
+
+  // Puxar para atualizar: busca de novo o mês E o período (o app pode ficar
+  // aberto de um dia para o outro, e o primeiro mês editável mudar).
+  // Os dados antigos ficam na tela até os novos chegarem.
+  async function refresh() {
+    const [loaded, newPeriod] = await Promise.all([
+      loadMonth(month),
+      api<PeriodResponse>('/api/period').catch(() => null),
+    ])
+    setResult(loaded)
+    if (newPeriod) setPeriod(newPeriod)
+  }
 
   function goToMonth(delta: number) {
     if (delta < 0 && !canGoBack) return
@@ -192,6 +210,8 @@ export function MonthPage() {
           />
         )}
       </div>
+
+      <PullToRefresh onRefresh={refresh} disabled={sheet.mode !== 'closed'} />
 
       {editable && (
         <button className="fab" onClick={() => setSheet({ mode: 'create' })} aria-label="Nova transação"

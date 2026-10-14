@@ -24,7 +24,16 @@ export const LogOut = () => (
   </Icon>
 )
 
-export const ArrowDown = () => <Icon><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></Icon>
+export const RefreshCw = () => (
+  <Icon>
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+    <path d="M8 16H3v5" />
+  </Icon>
+)
+
+export const ArrowDown =() => <Icon><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></Icon>
 
 export const ArrowUp = () => <Icon><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></Icon>
 
