@@ -32,7 +32,7 @@ lançando salários e parcelas do cartão com antecedência.
 | 03 | **Lançamento rápido** | Pix, dinheiro, débito, crédito ou boleto, com parcelamento de 2x a 24x |
 | 04 | **Cartões e faturas** | Tocar numa fatura filtra as compras do cartão; um toque marca a fatura inteira como paga |
 | 05 | **Planejamento** | Salários e parcelas lançados nos meses seguintes; o mês anterior fica editável até o dia 5 |
-| 06 | **PWA** | Instala no iPhone, tem tema claro e escuro e troca de mês com um deslizar |
+| 06 | **PWA** | Instala no iPhone, tem tema claro e escuro, troca de mês com um deslizar, atualiza ao puxar a tela para baixo e se ajusta ao celular deitado |
 
 <br clear="right">
 
@@ -55,9 +55,11 @@ O código do backend é organizado **por funcionalidade** (`auth`, `transaction`
 - Dinheiro em `BigDecimal` / `NUMERIC(12,2)`, sempre positivo, com o sinal no tipo
 - JWT stateless com BCrypt; dado de outro usuário responde 404, com teste de isolamento
 - Login limitado a 5 tentativas por e-mail (`429 + Retry-After`)
+- Mês fechado não muda: excluir categoria ou cartão usado nele responde `409`
 - Erros no formato `ProblemDetail` (RFC 9457)
 - Schema versionado com Flyway; o Hibernate só valida
-- CSP restrita no nginx, sem `unsafe-inline`
+- CSP restrita (sem `unsafe-inline`), HSTS e Permissions-Policy no nginx
+- CI com as actions fixadas pelo SHA do commit
 
 <br clear="right">
 
