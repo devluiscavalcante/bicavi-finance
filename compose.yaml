@@ -39,6 +39,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Pronto = porta 8080 aceitando conexão. O Spring só abre a porta depois de
+    # subir tudo (inclusive as migrations do Flyway), então não precisa do Actuator.
+    # start_period: tempo de subida da JVM, em que as falhas ainda não contam.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   web:
     build: ./frontend
@@ -47,8 +56,11 @@ services:
     # Quem expõe para os iPhones, com HTTPS, é o Tailscale (ver DEPLOY.md).
     ports:
       - "127.0.0.1:${WEB_PORT:-8088}:80"
+    # Espera o backend ficar pronto: sem isso, as primeiras chamadas a /api
+    # logo depois de um "up" davam 502 enquanto as migrations rodavam.
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   db-data:
