@@ -30,7 +30,10 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken()
+  // Login e cadastro vão SEM token. O backend valida qualquer Bearer que chegar,
+  // mesmo em rota pública: um token vencido guardado no aparelho faria o login
+  // falhar com 401 e a tela trataria isso como "sessão expirada".
+  const token = path.startsWith('/api/auth/') ? null : getToken()
   const headers = new Headers(options.headers)
   if (options.body) {
     headers.set('Content-Type', 'application/json')

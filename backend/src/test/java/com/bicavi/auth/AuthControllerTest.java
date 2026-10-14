@@ -120,6 +120,21 @@ class AuthControllerTest {
         verifyNoInteractions(service);
     }
 
+    // permitAll não ignora o header: se veio um Bearer, o Spring Security o valida,
+    // e um token inválido ou vencido dá 401 antes do controller. Por isso o
+    // frontend não envia token para /api/auth/* (ver api.ts).
+    @Test
+    void loginWithInvalidTokenInHeaderReturns401EvenBeingPublic() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .header("Authorization", "Bearer token-vencido")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "luis@example.com", "password": "senha-forte-123"}
+                                """))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
     @Test
     void meWithValidTokenReturnsLoggedUser() throws Exception {
         when(service.me(7L)).thenReturn(new UserResponse(7L, "luis@example.com", "Luis"));
