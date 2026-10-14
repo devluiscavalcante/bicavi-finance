@@ -2,6 +2,7 @@ package com.bicavi.category;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.period.PeriodPolicy;
 import com.bicavi.transaction.TransactionType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +11,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +34,9 @@ class CategoryServiceTest {
 
     @Mock
     private CategoryRepository repository;
+
+    @Mock
+    private PeriodPolicy period;
 
     @InjectMocks
     private CategoryService service;
@@ -113,5 +119,31 @@ class CategoryServiceTest {
         assertThatThrownBy(() -> service.rename(USER, 1L, new UpdateCategoryRequest("Transporte")))
                 .isInstanceOf(ConflictException.class);
         assertThat(category.getName()).isEqualTo("Mercado");
+    }
+
+    // Excluir deixaria as transações de meses fechados "Sem categoria": mudaria o passado.
+    @Test
+    void deleteRejectsCategoryUsedInClosedMonth() {
+        when(repository.findByIdAndUserId(1L, USER))
+                .thenReturn(Optional.of(new Category(USER, "Mercado", TransactionType.EXPENSE)));
+        when(period.firstEditableMonth()).thenReturn(YearMonth.of(2026, 10));
+        when(repository.hasTransactionsBefore(USER, 1L, LocalDate.of(2026, 10, 1))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(USER, 1L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("A categoria 'Mercado' tem transações em meses fechados e não pode ser excluída");
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void deleteRemovesCategoryUsedOnlyInOpenMonths() {
+        Category category = new Category(USER, "Mercado", TransactionType.EXPENSE);
+        when(repository.findByIdAndUserId(1L, USER)).thenReturn(Optional.of(category));
+        when(period.firstEditableMonth()).thenReturn(YearMonth.of(2026, 10));
+        when(repository.hasTransactionsBefore(USER, 1L, LocalDate.of(2026, 10, 1))).thenReturn(false);
+
+        service.delete(USER, 1L);
+
+        verify(repository).delete(category);
     }
 }

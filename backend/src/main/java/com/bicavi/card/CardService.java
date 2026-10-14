@@ -2,6 +2,7 @@ package com.bicavi.card;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.period.PeriodPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,9 +14,11 @@ import java.util.List;
 public class CardService {
 
     private final CardRepository repository;
+    private final PeriodPolicy period;
 
-    public CardService(CardRepository repository) {
+    public CardService(CardRepository repository, PeriodPolicy period) {
         this.repository = repository;
+        this.period = period;
     }
 
     @Transactional(readOnly = true)
@@ -52,9 +55,16 @@ public class CardService {
     }
 
     // As despesas do cartão ficam sem cartão (ON DELETE SET NULL na V8).
+    // Por isso não exclui cartão usado em mês fechado: a exclusão mudaria
+    // esses meses, e mês fechado não muda (ver PeriodPolicy).
     @Transactional
     public void delete(Long userId, Long id) {
-        repository.delete(findOrThrow(userId, id));
+        Card card = findOrThrow(userId, id);
+        if (repository.hasTransactionsBefore(userId, id, period.firstEditableMonth().atDay(1))) {
+            throw new ConflictException("O cartão '" + card.getName()
+                    + "' tem compras em meses fechados e não pode ser excluído");
+        }
+        repository.delete(card);
     }
 
     private Card findOrThrow(Long userId, Long id) {

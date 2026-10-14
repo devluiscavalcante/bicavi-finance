@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.time.LocalDate;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -121,6 +123,20 @@ class CategoryRepositoryTest {
 
         assertThat(repository.existsByUserIdAndNameIgnoreCase(alice, "Mercado")).isTrue();
         assertThat(repository.existsByUserIdAndNameIgnoreCase(bob, "Mercado")).isTrue();
+    }
+
+    // "before" é exclusivo, e a transação precisa ser do usuário consultado.
+    @Test
+    void hasTransactionsBeforeLooksOnlyAtDatesBeforeTheLimitForTheOwner() {
+        Long mercado = repository.saveAndFlush(new Category(alice, "Mercado", TransactionType.EXPENSE)).getId();
+        jdbc.update("""
+                INSERT INTO transactions (user_id, category_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, ?, 10.00, 'EXPENSE', 'PIX', ?, NOW())
+                """, alice, mercado, LocalDate.of(2026, 10, 1));
+
+        assertThat(repository.hasTransactionsBefore(alice, mercado, LocalDate.of(2026, 10, 1))).isFalse();
+        assertThat(repository.hasTransactionsBefore(alice, mercado, LocalDate.of(2026, 10, 2))).isTrue();
+        assertThat(repository.hasTransactionsBefore(bob, mercado, LocalDate.of(2026, 10, 2))).isFalse();
     }
 
     @Test

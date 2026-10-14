@@ -2,6 +2,7 @@ package com.bicavi.category;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.period.PeriodPolicy;
 import com.bicavi.transaction.TransactionType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,11 +14,13 @@ import java.util.List;
 public class CategoryService {
 
     private final CategoryRepository repository;
+    private final PeriodPolicy period;
 
     // Injeção pelo construtor: o Spring entrega o repository pronto.
     // Nos testes, podemos passar um mock no lugar.
-    public CategoryService(CategoryRepository repository) {
+    public CategoryService(CategoryRepository repository, PeriodPolicy period) {
         this.repository = repository;
+        this.period = period;
     }
 
     @Transactional(readOnly = true)
@@ -67,9 +70,17 @@ public class CategoryService {
         return CategoryResponse.from(category);
     }
 
+    // As transações da categoria ficam "Sem categoria" (ON DELETE SET NULL).
+    // Por isso não exclui categoria usada em mês fechado: a exclusão mudaria
+    // esses meses, e mês fechado não muda (ver PeriodPolicy).
     @Transactional
     public void delete(Long userId, Long id) {
-        repository.delete(findOrThrow(userId, id));
+        Category category = findOrThrow(userId, id);
+        if (repository.hasTransactionsBefore(userId, id, period.firstEditableMonth().atDay(1))) {
+            throw new ConflictException("A categoria '" + category.getName()
+                    + "' tem transações em meses fechados e não pode ser excluída");
+        }
+        repository.delete(category);
     }
 
     // Categoria de outro usuário = "não encontrada" (404). Não revelamos que ela existe.

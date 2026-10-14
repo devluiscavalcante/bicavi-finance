@@ -2,12 +2,15 @@ package com.bicavi.card;
 
 import com.bicavi.common.ConflictException;
 import com.bicavi.common.NotFoundException;
+import com.bicavi.period.PeriodPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +29,9 @@ class CardServiceTest {
 
     @Mock
     private CardRepository repository;
+
+    @Mock
+    private PeriodPolicy period;
 
     @InjectMocks
     private CardService service;
@@ -87,5 +93,30 @@ class CardServiceTest {
 
         assertThatThrownBy(() -> service.delete(USER, 5L)).isInstanceOf(NotFoundException.class);
         verify(repository, never()).delete(any());
+    }
+
+    // Excluir deixaria as compras de meses fechados "sem cartão": mudaria o passado.
+    @Test
+    void deleteRejectsCardUsedInClosedMonth() {
+        when(repository.findByIdAndUserId(3L, USER)).thenReturn(Optional.of(new Card(USER, "Nubank")));
+        when(period.firstEditableMonth()).thenReturn(YearMonth.of(2026, 10));
+        when(repository.hasTransactionsBefore(USER, 3L, LocalDate.of(2026, 10, 1))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(USER, 3L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("O cartão 'Nubank' tem compras em meses fechados e não pode ser excluído");
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void deleteRemovesCardUsedOnlyInOpenMonths() {
+        Card card = new Card(USER, "Nubank");
+        when(repository.findByIdAndUserId(3L, USER)).thenReturn(Optional.of(card));
+        when(period.firstEditableMonth()).thenReturn(YearMonth.of(2026, 10));
+        when(repository.hasTransactionsBefore(USER, 3L, LocalDate.of(2026, 10, 1))).thenReturn(false);
+
+        service.delete(USER, 3L);
+
+        verify(repository).delete(card);
     }
 }

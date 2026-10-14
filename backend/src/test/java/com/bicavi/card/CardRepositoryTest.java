@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.time.LocalDate;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -118,10 +120,33 @@ class CardRepositoryTest {
                 .isEqualTo(1);
     }
 
+    // "before" é exclusivo: compra no dia 01/10 não conta como "antes de 01/10".
+    @Test
+    void hasTransactionsBeforeLooksOnlyAtDatesBeforeTheLimit() {
+        Long card = repository.saveAndFlush(new Card(alice, "Nubank")).getId();
+        insertExpense("CREDITO", card, LocalDate.of(2026, 10, 1));
+
+        assertThat(repository.hasTransactionsBefore(alice, card, LocalDate.of(2026, 10, 1))).isFalse();
+        assertThat(repository.hasTransactionsBefore(alice, card, LocalDate.of(2026, 10, 2))).isTrue();
+    }
+
+    @Test
+    void hasTransactionsBeforeIgnoresOtherCards() {
+        Long nubank = repository.saveAndFlush(new Card(alice, "Nubank")).getId();
+        Long itau = repository.saveAndFlush(new Card(alice, "Itaú")).getId();
+        insertExpense("CREDITO", nubank, LocalDate.of(2026, 9, 10));
+
+        assertThat(repository.hasTransactionsBefore(alice, itau, LocalDate.of(2026, 10, 1))).isFalse();
+    }
+
     private void insertExpense(String paymentMethod, Long cardId) {
+        insertExpense(paymentMethod, cardId, LocalDate.now());
+    }
+
+    private void insertExpense(String paymentMethod, Long cardId, LocalDate occurredOn) {
         jdbc.update("""
                 INSERT INTO transactions (user_id, amount, type, payment_method, card_id, occurred_on, created_at)
-                VALUES (?, 10.00, 'EXPENSE', ?, ?, CURRENT_DATE, NOW())
-                """, alice, paymentMethod, cardId);
+                VALUES (?, 10.00, 'EXPENSE', ?, ?, ?, NOW())
+                """, alice, paymentMethod, cardId, occurredOn);
     }
 }

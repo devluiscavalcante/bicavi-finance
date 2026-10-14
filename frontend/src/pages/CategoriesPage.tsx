@@ -151,8 +151,10 @@ export function CategoriesPage() {
         <ConfirmDialog
           title={`Excluir "${toDelete.name}"?`}
           message={isCards
-            ? 'As compras deste cartão não serão apagadas: elas ficarão sem cartão.'
-            : "As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'."}
+            ? 'As compras deste cartão não serão apagadas: elas ficarão sem cartão. '
+              + 'Cartão usado em mês fechado não pode ser excluído.'
+            : "As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'. "
+              + 'Categoria usada em mês fechado não pode ser excluída.'}
           confirmLabel="Excluir"
           onConfirm={confirmDelete}
           onCancel={() => setToDelete(null)}
