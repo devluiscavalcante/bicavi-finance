@@ -36,6 +36,10 @@
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Largura da coluna do app (página, painel e posição do "+").
+     Cresce com o celular deitado (ver o fim do arquivo). */
+  --col: 480px;
+
   font-family: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -95,7 +99,7 @@ body {
 main {
   position: relative; /* fica acima do fundo animado */
   z-index: 1;
-  max-width: 480px;
+  max-width: var(--col);
   margin: 0 auto;
   /* env(safe-area-inset-*): espaço do entalhe e da barra de gestos do iPhone (0 nos demais). */
   padding: calc(16px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
@@ -732,7 +736,8 @@ button.tx-row:active {
 /* Botão flutuante "+" no canto inferior. */
 .fab {
   position: fixed;
-  right: max(20px, calc(50% - 240px + 20px)); /* alinha com a coluna de 480px */
+  /* Alinha com a borda direita da coluna; no celular deitado, respeita o entalhe. */
+  right: max(calc(20px + env(safe-area-inset-right)), calc(50% - var(--col) / 2 + 20px));
   bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: 2;
   display: grid;
@@ -777,8 +782,10 @@ main:has(.fab) {
 .sheet {
   margin: auto auto 0;
   width: 100%;
-  max-width: 480px;
+  max-width: var(--col);
   max-height: 92dvh;
+  /* Com o celular deitado o formulário não cabe na altura: rola dentro do painel. */
+  overflow-y: auto;
   padding: 0;
   border: none;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -1434,4 +1441,44 @@ button.pay-toggle:disabled {
   color: var(--hero-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Celular deitado ----------
+   "landscape" sozinho pegaria também tablets e PCs; com a altura até 500px,
+   só pega o celular na horizontal (a tela fica larga e baixa).
+   A coluna fica mais larga e o topo mais compacto, sobrando altura para o conteúdo. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --col: 640px;
+  }
+
+  main {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .top {
+    margin-bottom: 8px;
+  }
+
+  .month-nav {
+    margin-bottom: 8px;
+  }
+
+  .hero {
+    padding: 18px 20px;
+    gap: 14px;
+  }
+
+  .hero-balance {
+    font-size: 1.9rem;
+  }
+
+  .card {
+    padding: 16px 20px;
+    margin-top: 12px;
+  }
+
+  .sheet {
+    max-height: 100dvh;
+  }
 }

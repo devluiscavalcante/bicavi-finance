@@ -27,7 +27,8 @@ export default defineConfig({
         scope: '/',
         // standalone: abre em tela cheia, sem a barra do navegador.
         display: 'standalone',
-        orientation: 'portrait',
+        // any: gira junto com o celular (o layout se ajusta; ver o fim do index.css).
+        orientation: 'any',
         background_color: '#fafafa',
         theme_color: '#18181b',
         icons: [
