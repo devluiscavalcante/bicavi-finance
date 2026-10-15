@@ -3,3 +3,6 @@
 
 # Segredos locais
 .env
+
+# Configuracao local de ferramentas
+.claude/
