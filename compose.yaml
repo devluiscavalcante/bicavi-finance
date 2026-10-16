@@ -32,8 +32,13 @@ services:
     environment:
       DB_HOST: db
       DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      # O backend NÃO usa o administrador do banco (DB_USER, superusuário):
+      # entra com um usuário comum, dono só das tabelas do Bicavi
+      # (criado por scripts/create-app-role.ps1). Se o backend for invadido,
+      # o estrago fica nos dados do app: sem rodar comandos no container,
+      # ler arquivos ou criar outros usuários no Postgres.
+      DB_USER: ${APP_DB_USER}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     # Só sobe quando o Postgres estiver aceitando conexões (senão o Flyway falha).
     depends_on:

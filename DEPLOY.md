@@ -53,8 +53,9 @@ copy .env.example .env
 notepad .env
 ```
 
-Preencha `DB_PASSWORD` e `JWT_SECRET`, que vêm vazios, com valores **novos** (não
-reutilize os de desenvolvimento). Vazios, o app não sobe. Para gerar cada um, rode no PowerShell e cole o resultado:
+Preencha `DB_PASSWORD`, `APP_DB_PASSWORD` e `JWT_SECRET`, que vêm vazios, com
+valores **novos e diferentes entre si** (não reutilize os de desenvolvimento).
+Vazios, o app não sobe. Para gerar cada um, rode no PowerShell e cole o resultado:
 
 ```powershell
 -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 40 | % {[char]$_})
@@ -63,9 +64,18 @@ reutilize os de desenvolvimento). Vazios, o app não sobe. Para gerar cada um, r
 > O `.env` nunca vai para o git. Guarde uma cópia num gerenciador de senhas:
 > sem o `DB_PASSWORD`, um backup não pode ser restaurado em outra instalação.
 
+São dois usuários no banco: o `DB_USER` é o **administrador** (só o Postgres e os
+scripts de backup usam), e o `APP_DB_USER` é o usuário **comum** com que o backend
+entra. Se o backend um dia for invadido, o invasor fica preso aos dados do app:
+não consegue rodar comandos no PC, ler arquivos nem criar usuários no banco.
+
 ## 4. Subir o app
 
+Primeiro só o banco, depois o usuário do app, depois o resto:
+
 ```powershell
+docker compose up -d db
+powershell -ExecutionPolicy Bypass -File .\scripts\create-app-role.ps1
 docker compose up -d --build
 ```
 
@@ -174,6 +184,37 @@ que alteram a estrutura do banco. Voltar o código não desfaz uma migration:
 o que desfaz é restaurar o backup feito **antes** dela rodar.
 
 Os iPhones recebem a versão nova sozinhos na próxima vez que o app abrir.
+
+### Uma vez só: usuário próprio do backend no banco
+
+Instalações feitas antes desta mudança têm o backend entrando no banco como
+**administrador**. A versão nova usa um usuário comum (seção 3), que precisa ser
+criado **uma vez**. Sem isso, o backend não sobe. Atualize assim, no lugar dos
+comandos acima:
+
+1. Gere uma senha nova (comando da seção 3) e acrescente ao `.env`:
+
+   ```
+   APP_DB_USER=bicavi_app
+   APP_DB_PASSWORD=<senha gerada>
+   ```
+
+2. Backup, atualização e criação do usuário:
+
+   ```powershell
+   cd C:\bicavi
+   git log -1 --oneline
+   powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -Destino "$env:USERPROFILE\OneDrive\Bicavi-backups"
+   git pull
+   powershell -ExecutionPolicy Bypass -File .\scripts\create-app-role.ps1
+   docker compose pull db
+   docker compose build --pull
+   docker compose up -d
+   ```
+
+O script transfere o banco e as tabelas para o usuário do app; nenhum dado muda.
+Se precisar voltar ao código antigo, ele continua funcionando (o administrador
+acessa tudo), e o script pode rodar de novo depois.
 
 ### Se o `git pull` reclamar de históricos divergentes
 
