@@ -139,6 +139,34 @@ class TransactionRepositoryTest {
                 .hasMessageContaining("fk_transactions_category");
     }
 
+    // Defesa em profundidade (V11): mesmo que o service esquecesse o
+    // findByIdAndUserId, o banco não liga a transação da Alice ao dado do Bob.
+    @Test
+    void databaseRejectsCategoryOfAnotherUser() {
+        Category bobs = categories.save(new Category(bob, "Do Bob", TransactionType.EXPENSE));
+        flushAndClear();
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, category_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, ?, 10, 'EXPENSE', 'PIX', DATE '2026-10-06', now())
+                """, alice, bobs.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_transactions_category");
+    }
+
+    @Test
+    void databaseRejectsCardOfAnotherUser() {
+        Card bobs = cards.save(new Card(bob, "Cartão do Bob"));
+        flushAndClear();
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO transactions (user_id, card_id, amount, type, payment_method, occurred_on, created_at)
+                VALUES (?, ?, 10, 'EXPENSE', 'CREDITO', DATE '2026-10-06', now())
+                """, alice, bobs.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_transactions_card");
+    }
+
     @Test
     void savesAndReadsPaymentMethodAndCard() {
         Long id = transactions.save(expense("30.00").user(alice).credit(aliceCard).description("Caderno").build()).getId();
