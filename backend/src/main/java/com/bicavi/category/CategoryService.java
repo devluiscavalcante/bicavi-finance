@@ -52,6 +52,10 @@ public class CategoryService {
                 .toList());
     }
 
+    // Renomear é permitido mesmo com transações em meses fechados, e o nome novo
+    // aparece também nesses meses. A regra do mês fechado protege valores e
+    // classificação (por isso excluir é bloqueado: as transações virariam "Sem
+    // categoria"). O nome é só um rótulo: renomear não muda nenhum total.
     @Transactional
     public CategoryResponse rename(Long userId, Long id, UpdateCategoryRequest request) {
         Category category = findOrThrow(userId, id);

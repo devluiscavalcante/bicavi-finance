@@ -40,6 +40,8 @@ public class CardService {
         return CardResponse.from(repository.save(new Card(userId, name)));
     }
 
+    // Como na categoria: renomear vale para todos os meses, inclusive os fechados.
+    // O nome é só um rótulo; a fatura e os totais continuam os mesmos.
     @Transactional
     public CardResponse rename(Long userId, Long id, CardRequest request) {
         Card card = findOrThrow(userId, id);

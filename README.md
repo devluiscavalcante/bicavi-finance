@@ -54,8 +54,8 @@ O código do backend é organizado **por funcionalidade** (`auth`, `transaction`
 
 - Dinheiro em `BigDecimal` / `NUMERIC(12,2)`, sempre positivo, com o sinal no tipo
 - JWT stateless com BCrypt; dado de outro usuário responde 404, com teste de isolamento
-- Login limitado a 5 tentativas por e-mail (`429 + Retry-After`)
-- Mês fechado não muda: excluir categoria ou cartão usado nele responde `409`
+- Login limitado a 5 senhas erradas por e-mail, mais limites globais de login e cadastro (`429 + Retry-After`)
+- Mês fechado não muda valores nem classificação: excluir categoria ou cartão usado nele responde `409`; renomear vale para todos os meses (o nome é só um rótulo)
 - Erros no formato `ProblemDetail` (RFC 9457)
 - Schema versionado com Flyway; o Hibernate só valida
 - CSP restrita (sem `unsafe-inline`), HSTS e Permissions-Policy no nginx
