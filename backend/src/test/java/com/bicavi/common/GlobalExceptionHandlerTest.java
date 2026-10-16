@@ -35,6 +35,12 @@ class GlobalExceptionHandlerTest {
         String bug() {
             throw new IllegalStateException("detalhe interno: tabela X, linha 42");
         }
+
+        // Uma conta de datas que estoura (o ano máximo do Java é 999999999).
+        @GetMapping("/api/test/date-overflow")
+        String dateOverflow() {
+            return java.time.YearMonth.of(999_999_999, 12).plusMonths(1).toString();
+        }
     }
 
     @Autowired
@@ -53,6 +59,13 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.detail").value("Erro inesperado no servidor. Tente novamente."))
                 // A mensagem da exceção fica no log, nunca na resposta.
                 .andExpect(content().string(not(containsString("tabela X"))));
+    }
+
+    @Test
+    void dateOverflowReturns400InsteadOf500() throws Exception {
+        mockMvc.perform(get("/api/test/date-overflow").with(loggedUser()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Data fora do intervalo permitido"));
     }
 
     @Test

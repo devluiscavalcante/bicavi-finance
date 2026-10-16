@@ -30,11 +30,13 @@ class PeriodControllerTest {
     void returnsLimitsAsYearMonthStrings() throws Exception {
         when(policy.firstEditableMonth()).thenReturn(YearMonth.of(2026, 10));
         when(policy.oldestVisibleMonth()).thenReturn(YearMonth.of(2026, 4));
+        when(policy.lastMonth()).thenReturn(YearMonth.of(2031, 10));
 
         mockMvc.perform(get("/api/period").with(jwt().jwt(token -> token.subject("7"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstEditableMonth").value("2026-10"))
-                .andExpect(jsonPath("$.oldestVisibleMonth").value("2026-04"));
+                .andExpect(jsonPath("$.oldestVisibleMonth").value("2026-04"))
+                .andExpect(jsonPath("$.lastMonth").value("2031-10"));
     }
 
     @Test

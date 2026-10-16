@@ -227,6 +227,24 @@ class TransactionServiceTest {
     }
 
     @Test
+    void installmentsEndingBeyondTheLastMonthAreRejected() {
+        // Hoje é 06/10/2026: dá para lançar até 10/2031. 24x a partir de 01/2030
+        // terminariam em 12/2031. A 1ª parcela está ok; a última, não.
+        assertThatThrownBy(() -> service.createInstallments(USER, new InstallmentRequest(
+                new BigDecimal("2400"), 24, PaymentMethod.CREDITO, null, null, null, LocalDate.of(2030, 1, 10))))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Só é possível lançar até 10/2031");
+        verify(transactions, never()).saveAll(any());
+    }
+
+    @Test
+    void listingAnAbsurdMonthIsA400NotA500() {
+        // Antes: month.plusMonths(1) estourava no ano máximo do Java (DateTimeException -> 500).
+        assertThatThrownBy(() -> service.list(USER, YearMonth.of(999_999_999, 12), null))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
     void installmentsTooSmallToSplitAreRejected() {
         // 0,05 em 6x deixaria parcelas de 0,00.
         assertThatThrownBy(() -> service.createInstallments(USER, new InstallmentRequest(

@@ -72,7 +72,46 @@ class PeriodPolicyTest {
     }
 
     @Test
-    void futureMonthsAreAlwaysVisible() {
-        assertThat(on(2026, 10, 15).isVisible(LocalDate.of(2030, 1, 1))).isTrue();
+    void lastMonthIsFiveYearsAhead() {
+        assertThat(on(2026, 10, 15).lastMonth()).isEqualTo(YearMonth.of(2031, 10));
+    }
+
+    @Test
+    void canEditUpToLastMonthButNotBeyond() {
+        PeriodPolicy policy = on(2026, 10, 15);
+
+        assertThatCode(() -> policy.checkEditable(LocalDate.of(2031, 10, 31))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> policy.checkEditable(LocalDate.of(2031, 11, 1)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Só é possível lançar até 10/2031");
+    }
+
+    @Test
+    void canConsultUpToLastMonthButNotBeyond() {
+        PeriodPolicy policy = on(2026, 10, 15);
+
+        assertThatCode(() -> policy.checkVisible(YearMonth.of(2031, 10))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> policy.checkVisible(YearMonth.of(2031, 11)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Só é possível consultar até 10/2031");
+    }
+
+    @Test
+    void extremeDatesGetTheSameClearMessage() {
+        // O maior ano do Java: antes, a conta "mês seguinte" estourava e dava 500.
+        PeriodPolicy policy = on(2026, 10, 15);
+
+        assertThatThrownBy(() -> policy.checkVisible(YearMonth.of(999_999_999, 12)))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> policy.checkEditable(LocalDate.MAX))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void futureMonthsAreVisibleUpToLastMonth() {
+        PeriodPolicy policy = on(2026, 10, 15);
+
+        assertThat(policy.isVisible(LocalDate.of(2030, 1, 1))).isTrue();
+        assertThat(policy.isVisible(LocalDate.of(2031, 11, 1))).isFalse();
     }
 }

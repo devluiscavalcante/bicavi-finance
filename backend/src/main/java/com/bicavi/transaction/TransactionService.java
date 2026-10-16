@@ -78,8 +78,11 @@ public class TransactionService {
         if (request.paymentMethod() != PaymentMethod.CREDITO) {
             throw new BusinessRuleException("Só é possível parcelar compras no crédito");
         }
-        // Só a 1ª precisa ser checada: as demais caem em meses posteriores, que nunca estão fechados.
+        // A 1ª parcela não pode cair em mês fechado; a última não pode passar do
+        // horizonte de planejamento. As do meio ficam entre as duas.
+        // (A 1ª vem antes: com ela já dentro do horizonte, somar meses não estoura.)
         period.checkEditable(request.firstDate());
+        period.checkEditable(request.firstDate().plusMonths(count - 1));
         if (request.totalAmount().compareTo(MIN_INSTALLMENT.multiply(BigDecimal.valueOf(count))) < 0) {
             throw new BusinessRuleException("O total é pequeno demais para " + count + " parcelas (mínimo R$ 0,01 cada)");
         }

@@ -14,9 +14,9 @@ public class PeriodController {
         this.policy = policy;
     }
 
-    // GET /api/period -> {"firstEditableMonth": "2026-10", "oldestVisibleMonth": "2026-04"}
+    // GET /api/period -> {"firstEditableMonth": "2026-10", "oldestVisibleMonth": "2026-04", "lastMonth": "2031-10"}
     @GetMapping("/api/period")
     public PeriodResponse period() {
-        return new PeriodResponse(policy.firstEditableMonth(), policy.oldestVisibleMonth());
+        return new PeriodResponse(policy.firstEditableMonth(), policy.oldestVisibleMonth(), policy.lastMonth());
     }
 }

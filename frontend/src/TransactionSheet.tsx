@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { api, ApiError } from './api'
 import { ConfirmDialog } from './ConfirmDialog'
-import { formatPaymentMethod, installmentPreview, parseAmount, PAYMENT_METHODS } from './format'
+import { formatPaymentMethod, installmentPreview, lastDayOfMonth, parseAmount, PAYMENT_METHODS } from './format'
 import { Close } from './icons'
 import { sortByName } from './lists'
 import type {
@@ -346,8 +346,10 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
 
           <label>
             {split ? 'Data da 1ª parcela' : 'Data'}
-            {/* min: o seletor de data não oferece meses fechados. O backend recusa de qualquer jeito. */}
+            {/* min/max: o seletor de data não oferece meses fechados nem além do horizonte
+                de planejamento. O backend recusa de qualquer jeito. */}
             <input type="date" value={occurredOn} min={`${period.firstEditableMonth}-01`}
+                   max={lastDayOfMonth(period.lastMonth)}
                    onChange={e => setOccurredOn(e.target.value)} required />
             {/* Combinado com o casal: no crédito, a compra entra no mês em que a fatura é PAGA. */}
             {paymentMethod === 'CREDITO' && type === 'EXPENSE' && (

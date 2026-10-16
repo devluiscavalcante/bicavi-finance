@@ -70,6 +70,7 @@ export interface MonthlySummaryResponse {
 export interface PeriodResponse {
   firstEditableMonth: string // deste mês em diante: criar, editar e excluir
   oldestVisibleMonth: string // antes disso a API não devolve dados
+  lastMonth: string // horizonte de planejamento: depois disso não dá para lançar nem consultar
 }
 
 export interface CategoryResponse {

@@ -75,6 +75,7 @@ export function MonthPage() {
   // Enquanto o período não chega, nada é editável (o "+" só aparece depois).
   const editable = period !== null && month >= period.firstEditableMonth
   const canGoBack = period === null || month > period.oldestVisibleMonth
+  const canGoForward = period === null || month < period.lastMonth
 
   useEffect(() => {
     api<UserResponse>('/api/me').then(setUser).catch(() => {})
@@ -109,6 +110,7 @@ export function MonthPage() {
 
   function goToMonth(delta: number) {
     if (delta < 0 && !canGoBack) return
+    if (delta > 0 && !canGoForward) return
     setSlide(delta > 0 ? 'next' : 'prev')
     setSearchParams({ month: addMonths(month, delta) })
   }
@@ -188,7 +190,8 @@ export function MonthPage() {
           <h1>{formatMonth(month)}</h1>
           {period && !editable && <span className="badge">Somente leitura</span>}
         </div>
-        <button className="icon-btn" onClick={() => goToMonth(1)} aria-label="Próximo mês">
+        <button className="icon-btn" onClick={() => goToMonth(1)} aria-label="Próximo mês"
+                disabled={!canGoForward}>
           <ChevronRight />
         </button>
       </nav>

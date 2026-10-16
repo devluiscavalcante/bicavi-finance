@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  addMonths, currentMonth, formatDay, formatDayHeading, formatMoney, installmentPreview, isValidMonth, monthOf,
-  parseAmount, todayIso, transactionTitle,
+  addMonths, currentMonth, formatDay, formatDayHeading, formatMoney, installmentPreview, isValidMonth,
+  lastDayOfMonth, monthOf, parseAmount, todayIso, transactionTitle,
 } from './format'
 
 // O Intl separa "R$" do número com um espaço INQUEBRÁVEL (\u00a0). Trocamos
@@ -62,6 +62,13 @@ describe('meses', () => {
     expect(addMonths('2026-01', -1)).toBe('2025-12')
     expect(addMonths('2026-12', 1)).toBe('2027-01')
     expect(addMonths('2026-10', -13)).toBe('2025-09')
+  })
+
+  it('lastDayOfMonth conhece meses de 30 e 31 dias e o fevereiro bissexto', () => {
+    expect(lastDayOfMonth('2031-10')).toBe('2031-10-31')
+    expect(lastDayOfMonth('2031-11')).toBe('2031-11-30')
+    expect(lastDayOfMonth('2027-02')).toBe('2027-02-28')
+    expect(lastDayOfMonth('2028-02')).toBe('2028-02-29')
   })
 
   it('isValidMonth só aceita "AAAA-MM" com mês de 01 a 12', () => {

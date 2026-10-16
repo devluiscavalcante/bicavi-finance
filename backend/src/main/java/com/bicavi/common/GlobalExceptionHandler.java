@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.time.DateTimeException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -66,6 +67,14 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
                 "Valor inválido para o parâmetro: " + ex.getName());
+    }
+
+    // Conta de datas fora do intervalo do Java (ex.: somar um mês ao ano 999999999).
+    // O PeriodPolicy barra datas assim antes das contas; isto é só a rede de
+    // segurança, para um caso esquecido virar 400 e não 500.
+    @ExceptionHandler(DateTimeException.class)
+    public ProblemDetail handleDateTime(DateTimeException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Data fora do intervalo permitido");
     }
 
     // Rede de segurança: se duas requisições simultâneas passarem pela checagem

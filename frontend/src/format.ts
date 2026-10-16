@@ -32,6 +32,13 @@ export function addMonths(month: string, delta: number): string {
   return toMonthString(date.getFullYear(), date.getMonth() + 1)
 }
 
+// lastDayOfMonth("2026-02") -> "2026-02-28". Dia 0 do mês seguinte = último dia deste.
+export function lastDayOfMonth(month: string): string {
+  const [year, m] = month.split('-').map(Number)
+  const day = new Date(year, m, 0).getDate()
+  return `${month}-${String(day).padStart(2, '0')}`
+}
+
 // "2026-10" -> "outubro de 2026"
 export function formatMonth(month: string): string {
   const [year, m] = month.split('-').map(Number)
