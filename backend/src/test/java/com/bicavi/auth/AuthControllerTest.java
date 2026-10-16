@@ -131,7 +131,7 @@ class AuthControllerTest {
                                 """.formatted(email)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.email").exists());
-        // Nem chega ao service, logo nem ao LoginRateLimiter: nenhum balde é criado.
+        // Nem chega ao service, logo nem ao AuthRateLimiter: nenhum balde é criado.
         verifyNoInteractions(service);
     }
 

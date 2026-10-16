@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -43,9 +44,9 @@ class AuthServiceTest {
     private TokenService tokenService;
 
     // Mock: por padrão não faz nada (libera todas as tentativas).
-    // O comportamento real do limite é testado em LoginRateLimiterTest.
+    // O comportamento real dos limites é testado em AuthRateLimiterTest.
     @Mock
-    private LoginRateLimiter loginRateLimiter;
+    private AuthRateLimiter rateLimiter;
 
     @Mock
     private CategoryService categoryService;
@@ -58,7 +59,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(users, passwordEncoder, tokenService, loginRateLimiter, categoryService);
+        service = new AuthService(users, passwordEncoder, tokenService, rateLimiter, categoryService);
     }
 
     @Test
@@ -68,13 +69,13 @@ class AuthServiceTest {
         catchThrowable(() -> service.login(new LoginRequest(" LUIS@Example.com ", "errada")));
 
         // " LUIS@Example.com " e "luis@example.com" gastam o MESMO balde.
-        verify(loginRateLimiter).tryConsume("luis@example.com");
+        verify(rateLimiter).tryConsumeLogin("luis@example.com");
     }
 
     @Test
     void loginOverTheLimitSkipsDatabaseAndBcrypt() {
         doThrow(new TooManyRequestsException("Muitas tentativas", Duration.ofMinutes(3)))
-                .when(loginRateLimiter).tryConsume("luis@example.com");
+                .when(rateLimiter).tryConsumeLogin("luis@example.com");
 
         assertThatThrownBy(() -> service.login(new LoginRequest("luis@example.com", "senha-forte-123")))
                 .isInstanceOf(TooManyRequestsException.class);
@@ -135,6 +136,19 @@ class AuthServiceTest {
         assertThat(hash).isNotEqualTo("senha-forte-123").startsWith("$2a$10$").hasSize(60);
         assertThat(passwordEncoder.matches("senha-forte-123", hash)).isTrue();
         assertThat(passwordEncoder.matches("senha-errada", hash)).isFalse();
+    }
+
+    @Test
+    void registerOverTheLimitSkipsDatabaseAndBcrypt() {
+        doThrow(new TooManyRequestsException("Muitos cadastros", Duration.ofMinutes(12)))
+                .when(rateLimiter).tryConsumeRegister();
+        // O construtor do AuthService já rodou o BCrypt uma vez (dummyHash): zera a contagem.
+        clearInvocations(passwordEncoder);
+
+        assertThatThrownBy(() -> service.register(new RegisterRequest("luis@example.com", "senha-forte-123", "Luis")))
+                .isInstanceOf(TooManyRequestsException.class);
+        verifyNoInteractions(users, categoryService);
+        verify(passwordEncoder, never()).encode(any());
     }
 
     @Test

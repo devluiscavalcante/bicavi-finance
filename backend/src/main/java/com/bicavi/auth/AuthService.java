@@ -30,24 +30,26 @@ public class AuthService {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
-    private final LoginRateLimiter loginRateLimiter;
+    private final AuthRateLimiter rateLimiter;
     private final CategoryService categoryService;
 
     // Hash de uma senha qualquer, usado quando o e-mail não existe (ver login).
     private final String dummyHash;
 
     public AuthService(UserRepository users, PasswordEncoder passwordEncoder, TokenService tokenService,
-                       LoginRateLimiter loginRateLimiter, CategoryService categoryService) {
+                       AuthRateLimiter rateLimiter, CategoryService categoryService) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
-        this.loginRateLimiter = loginRateLimiter;
+        this.rateLimiter = rateLimiter;
         this.categoryService = categoryService;
         this.dummyHash = passwordEncoder.encode("senha-ficticia-para-equalizar-tempo");
     }
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
+        // Antes de tudo: com o limite estourado, nem consulta o banco nem roda o BCrypt.
+        rateLimiter.tryConsumeRegister();
         String email = normalizeEmail(request.email());
         if (request.password().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
             throw new BusinessRuleException("A senha é longa demais");
@@ -69,7 +71,7 @@ public class AuthService {
         String email = normalizeEmail(request.email());
         // Antes de tudo: com o limite estourado, nem consulta o banco nem roda o BCrypt.
         // Vale igual para e-mail existente ou não, então o 429 não revela quem tem conta.
-        loginRateLimiter.tryConsume(email);
+        rateLimiter.tryConsumeLogin(email);
 
         Optional<User> user = users.findByEmail(email);
 
