@@ -85,6 +85,8 @@ public class AuthService {
             throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
 
+        // Senha certa: a tentativa não conta para o limite do e-mail.
+        rateLimiter.loginSucceeded(email);
         String token = tokenService.issue(user.get());
         return new LoginResponse(token, "Bearer", tokenService.expiration().toSeconds());
     }

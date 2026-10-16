@@ -95,6 +95,18 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("token.jwt.assinado");
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresIn()).isEqualTo(86_400);
+        // Login certo devolve a tentativa ao limite do e-mail (normalizado).
+        verify(rateLimiter).loginSucceeded("luis@example.com");
+    }
+
+    @Test
+    void loginWithWrongPasswordKeepsTheAttemptCounted() {
+        User user = new User("luis@example.com", passwordEncoder.encode("senha-forte-123"), "Luis");
+        when(users.findByEmail("luis@example.com")).thenReturn(Optional.of(user));
+
+        catchThrowable(() -> service.login(new LoginRequest("luis@example.com", "senha-errada")));
+
+        verify(rateLimiter, never()).loginSucceeded(any());
     }
 
     @Test

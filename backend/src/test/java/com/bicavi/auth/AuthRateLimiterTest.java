@@ -70,6 +70,43 @@ class AuthRateLimiterTest {
     }
 
     @Test
+    void successfulLoginsGiveTheAttemptBack() {
+        // Mais logins certos que o limite (vários aparelhos, o mesmo login): nenhum é barrado.
+        for (int i = 0; i < 10; i++) {
+            limiter.tryConsumeLogin("casal@example.com");
+            limiter.loginSucceeded("casal@example.com");
+        }
+
+        assertThatCode(() -> limiter.tryConsumeLogin("casal@example.com")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void wrongPasswordsStillCountAfterASuccessfulLogin() {
+        limiter.tryConsumeLogin("casal@example.com");
+        limiter.loginSucceeded("casal@example.com");
+
+        // 5 senhas erradas seguidas: a 6ª tentativa é barrada, mesmo depois de um login certo.
+        exhaust("casal@example.com");
+        TooManyRequestsException blocked = catchThrowableOfType(TooManyRequestsException.class,
+                () -> limiter.tryConsumeLogin("casal@example.com"));
+        assertThat(blocked).isNotNull();
+    }
+
+    @Test
+    void givingBackNeverGoesAboveTheLimit() {
+        // Devolver sem ter gasto (ou devolver a mais) não acumula fichas extras.
+        limiter.tryConsumeLogin("casal@example.com");
+        for (int i = 0; i < 10; i++) {
+            limiter.loginSucceeded("casal@example.com");
+        }
+
+        exhaust("casal@example.com");
+        TooManyRequestsException blocked = catchThrowableOfType(TooManyRequestsException.class,
+                () -> limiter.tryConsumeLogin("casal@example.com"));
+        assertThat(blocked).isNotNull();
+    }
+
+    @Test
     void globalLoginLimitBlocksLoopWithDifferentEmails() {
         // Um e-mail novo por tentativa: o limite por e-mail nunca estoura...
         for (int i = 0; i < 30; i++) {

@@ -22,7 +22,7 @@ import java.time.Instant;
 //
 // Três baldes:
 //  - um por e-mail no login: contra força bruta (testar senhas de uma conta sem parar).
-//    Toda tentativa conta (certa ou errada): a regra fica simples e o limite é folgado.
+//    Só as tentativas erradas ficam contando: o login certo devolve a ficha (loginSucceeded).
 //  - um global no login: com um e-mail diferente a cada tentativa, o limite por
 //    e-mail nunca estoura, mas cada tentativa roda o BCrypt (lento de propósito).
 //    Um loop assim ocuparia a CPU do servidor.
@@ -74,6 +74,19 @@ public class AuthRateLimiter {
     public void tryConsumeLogin(String email) {
         consume(loginBuckets.get(email, key -> newBucket(properties.loginPerEmail())), LOGIN_MESSAGE);
         consume(loginGlobal, LOGIN_MESSAGE);
+    }
+
+    // Login certo: devolve a ficha que tryConsumeLogin gastou do balde do e-mail.
+    // Assim só as senhas ERRADAS se acumulam. Sem isso, quem divide a conta (o
+    // casal usa um login só, em vários aparelhos) gastaria as 5 fichas só entrando
+    // e bloquearia o login dos dois. O global não devolve: ele protege a CPU, e
+    // o login certo também rodou o BCrypt.
+    // O Bucket4j nunca passa da capacidade, então devolver a mais não acumula fichas.
+    public void loginSucceeded(String email) {
+        Bucket bucket = loginBuckets.getIfPresent(email);
+        if (bucket != null) {
+            bucket.addTokens(1);
+        }
     }
 
     // Gasta uma tentativa de cadastro ou lança 429.
