@@ -53,8 +53,8 @@ copy .env.example .env
 notepad .env
 ```
 
-Troque `DB_PASSWORD` e `JWT_SECRET` por valores **novos** (não reutilize os de
-desenvolvimento). Para gerar cada um, rode no PowerShell e cole o resultado:
+Preencha `DB_PASSWORD` e `JWT_SECRET`, que vêm vazios, com valores **novos** (não
+reutilize os de desenvolvimento). Vazios, o app não sobe. Para gerar cada um, rode no PowerShell e cole o resultado:
 
 ```powershell
 -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 40 | % {[char]$_})

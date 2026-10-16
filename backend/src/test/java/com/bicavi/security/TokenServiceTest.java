@@ -86,6 +86,17 @@ class TokenServiceTest {
                 .hasMessageContaining("32 bytes");
     }
 
+    // JWT_SECRET= vazio (como vem no .env.example) ou ausente: o app não sobe.
+    @Test
+    void missingSecretPreventsStartup() {
+        assertThatThrownBy(() -> new JwtProperties("", Duration.ofHours(24)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32 bytes");
+        assertThatThrownBy(() -> new JwtProperties(null, Duration.ofHours(24)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32 bytes");
+    }
+
     @Test
     void nonPositiveExpirationPreventsStartup() {
         assertThatThrownBy(() -> new JwtProperties(SECRET, Duration.ofHours(-1)))
