@@ -18,7 +18,10 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql/data
-    # Sem "ports": o banco só é acessível pela rede interna do compose.
+    # Sem "ports": o banco só é acessível pela rede "data", ou seja, só pelo backend.
+    networks: [data]
+    mem_limit: 512m
+    pids_limit: 200
     healthcheck:
       # $$ = "$" literal: a variável é lida DENTRO do container, não pelo compose.
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -40,6 +43,10 @@ services:
       DB_USER: ${APP_DB_USER}
       DB_PASSWORD: ${APP_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+    networks: [app, data]
+    # A JVM usa até 75% disto (MaxRAMPercentage no Dockerfile).
+    mem_limit: 768m
+    pids_limit: 200
     # Só sobe quando o Postgres estiver aceitando conexões (senão o Flyway falha).
     depends_on:
       db:
@@ -61,11 +68,38 @@ services:
     # Quem expõe para os iPhones, com HTTPS, é o Tailscale (ver DEPLOY.md).
     ports:
       - "127.0.0.1:${WEB_PORT:-8088}:80"
+    networks: [edge, app]
+    mem_limit: 64m
+    pids_limit: 100
     # Espera o backend ficar pronto: sem isso, as primeiras chamadas a /api
     # logo depois de um "up" davam 502 enquanto as migrations rodavam.
     depends_on:
       backend:
         condition: service_healthy
+
+# Cada container só enxerga quem precisa:
+#
+#   edge (com internet)       app (interna)            data (interna)
+#   Tailscale ──► web ─────────────► backend ─────────────► db
+#
+# - edge: só o nginx. Existe porque o Docker não publica porta (a 8088) de
+#   container ligado apenas a redes internas.
+# - app: nginx e backend. O nginx alcança o backend, e só ele.
+# - data: backend e banco. O nginx não alcança o banco.
+# internal: true = sem saída para a internet. O backend e o banco não chamam
+# nada de fora; se um deles fosse invadido, o invasor não conseguiria baixar
+# ferramentas nem mandar os dados para fora por aqui.
+networks:
+  edge: {}
+  app:
+    internal: true
+  data:
+    internal: true
+
+# mem_limit / pids_limit (em cada serviço): teto de memória e de processos.
+# Um vazamento de memória ou um abuso (ex.: criar processos sem parar) derruba
+# só aquele container, que o "restart" sobe de novo, e não o PC inteiro.
+# Juntos, os três usam no máximo ~1,3 GB.
 
 volumes:
   db-data:
