@@ -21,7 +21,10 @@ COPY . .
 RUN npm run build
 
 # ---------- 2. runtime ----------
-FROM nginx:stable-alpine
+# Variante "unprivileged" da própria NGINX Inc.: o nginx roda como usuário comum
+# (uid 101), e não como root. Se for invadido, o invasor não é root no container.
+# Por isso escuta na porta 8080: portas abaixo de 1024 exigem root.
+FROM nginxinc/nginx-unprivileged:stable-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
