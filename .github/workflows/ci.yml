@@ -16,6 +16,9 @@ on:
 # movida para outro código, um SHA não. O comentário diz a versão correspondente.
 #
 # Só leitura do repositório: o CI não precisa escrever nada.
+# Pelo mesmo motivo, o checkout usa persist-credentials: false: sem isso, o token
+# do GitHub fica gravado no .git/config durante o job, ao alcance de qualquer
+# código que rode depois (inclusive o de uma dependência comprometida).
 permissions:
   contents: read
 
@@ -33,6 +36,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
@@ -55,6 +60,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
@@ -63,7 +70,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       # npm ci: instala exatamente o package-lock (o mesmo que o Docker usa).
-      - run: npm ci
+      # --ignore-scripts: não roda scripts de instalação (postinstall...) das
+      # dependências, o caminho dos ataques em que um pacote popular é comprometido
+      # e passa a roubar tokens e segredos. Nenhuma dependência usada aqui precisa
+      # deles (a única que tem, fsevents, é opcional e só do macOS).
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       # Vitest: funções puras de formatação, valores e listas.
       - run: npm test

@@ -13,7 +13,9 @@ WORKDIR /app
 # Mesmo truque de cache do backend: dependências antes do código.
 COPY package.json package-lock.json ./
 # npm ci: instala EXATAMENTE as versões do package-lock (build reproduzível).
-RUN npm ci
+# --ignore-scripts: dependência comprometida não roda código na instalação
+# (ver o comentário no .github/workflows/ci.yml).
+RUN npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build
