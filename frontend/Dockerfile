@@ -2,6 +2,9 @@
 #  1. build: Node gera os arquivos estáticos (dist/), incluindo o service worker
 #  2. runtime: nginx serve esses arquivos e repassa /api para o backend.
 #     Node não existe na imagem final: em produção o frontend é só HTML/JS/CSS.
+#
+# Imagens pela tag (24-alpine, stable-alpine), e não pelo digest: assim o
+# "build --pull" traz as correções de segurança do nginx (ver DEPLOY.md, seção 8).
 
 # ---------- 1. build ----------
 FROM node:24-alpine AS build

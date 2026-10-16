@@ -2,6 +2,9 @@
 #  1. build: JDK + Maven Wrapper compilam e geram o .jar
 #  2. runtime: só o JRE e o .jar. Sem JDK, Maven nem código-fonte: imagem
 #     menor e com menos coisa que um invasor poderia usar.
+#
+# Imagens pela tag (21-jdk, 21-jre), e não pelo digest: assim o "build --pull"
+# traz as correções de segurança do Java (ver DEPLOY.md, seção 8).
 
 # ---------- 1. build ----------
 FROM eclipse-temurin:21-jdk AS build

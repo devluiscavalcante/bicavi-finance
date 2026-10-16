@@ -178,6 +178,13 @@ chegariam aqui. A tag `postgres:17` só recebe versões 17.x, que são
 compatíveis com os dados já gravados; a troca para outra versão principal
 (18, por exemplo) exige migrar os dados e nunca acontece sozinha.
 
+As imagens base são referenciadas pela **tag** (`postgres:17`), e não pelo
+**digest** (`postgres:17@sha256:...`), de propósito. O digest garante que a imagem
+é sempre a mesma, o que protege contra uma imagem adulterada no Docker Hub, mas
+também a congela: as correções de segurança só chegariam trocando o digest à mão
+a cada versão. Sem uma ferramenta que faça essa troca sozinha (como o Dependabot),
+a tag oficial mais o `pull` acima deixam o app mais protegido na prática.
+
 **Sempre faça o backup antes do `git pull`.** Versões novas podem trazer
 *migrations* (arquivos `V*.sql` em `backend/src/main/resources/db/migration`)
 que alteram a estrutura do banco. Voltar o código não desfaz uma migration:

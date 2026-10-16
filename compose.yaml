@@ -10,6 +10,8 @@ name: bicavi
 
 services:
   db:
+    # Tag, e não digest: o "compose pull db" traz as correções do Postgres 17.x
+    # (ver DEPLOY.md, seção 8).
     image: postgres:17
     restart: unless-stopped
     environment:
