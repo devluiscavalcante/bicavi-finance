@@ -54,6 +54,13 @@ public class AuthService {
         if (request.password().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
             throw new BusinessRuleException("A senha é longa demais");
         }
+        // Contrapartida consciente: esta resposta revela que o e-mail tem conta,
+        // algo que o login esconde (mesma mensagem e mesmo tempo). Escondê-la aqui
+        // exigiria responder sempre "verifique seu e-mail" e confirmar por e-mail;
+        // sem isso, quem digitasse um e-mail já cadastrado ficaria sem saber o que
+        // houve. O limite de cadastros (AuthRateLimiter) reduz a descoberta a
+        // poucos e-mails por hora. Num deploy aberto ao público, o caminho é a
+        // confirmação por e-mail.
         if (users.existsByEmail(email)) {
             throw new ConflictException("Este e-mail já está cadastrado");
         }
