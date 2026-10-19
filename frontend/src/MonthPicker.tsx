@@ -50,16 +50,28 @@ export function MonthPicker({ month, from, to, top, dragPointerId, onSelect, onC
 
   useEffect(() => {
     const dialog = dialogRef.current
+    // showModal() foca o primeiro botão do dialog (o mês mais antigo), e focar
+    // rola a faixa até ele. No Safari essa rolagem chega DEPOIS da nossa e o
+    // picker abria no primeiro mês. Com autofocus no próprio <dialog>, o foco
+    // fica nele e nada rola sozinho. (setAttribute porque o autoFocus do React
+    // chama focus() por conta própria em vez de pôr o atributo no HTML.)
+    dialog?.setAttribute('autofocus', '')
     // StrictMode roda efeitos duas vezes em dev: showModal() num dialog aberto lança erro.
     if (dialog && !dialog.open) dialog.showModal()
 
     // Abre já com o mês atual da tela no centro (sem animação de rolagem).
-    const strip = stripRef.current
-    const selected = strip?.querySelector<HTMLElement>('[aria-current="date"]')
-    if (strip && selected) {
-      strip.scrollLeft = selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2
+    function centerSelected() {
+      const strip = stripRef.current
+      const selected = strip?.querySelector<HTMLElement>('[aria-current="date"]')
+      if (strip && selected) {
+        strip.scrollLeft = selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2
+      }
+      updateDistances()
     }
-    updateDistances()
+    centerSelected()
+    // De novo no próximo quadro, caso alguma rolagem atrasada do navegador ainda chegue.
+    const frame = requestAnimationFrame(centerSelected)
+    return () => cancelAnimationFrame(frame)
   }, [])
 
   // Segurou o título, o picker abriu e o dedo continua na tela: arrastar para os

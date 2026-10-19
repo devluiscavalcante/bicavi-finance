@@ -1130,6 +1130,11 @@ a.icon-btn {
   animation: picker-in 0.35s var(--ease);
 }
 
+/* O foco inicial fica no próprio dialog (ver MonthPicker): sem contorno nele. */
+.month-picker:focus {
+  outline: none;
+}
+
 .month-picker::backdrop {
   background: rgb(0 0 0 / 0.25);
   animation: fade-in 0.3s ease;
