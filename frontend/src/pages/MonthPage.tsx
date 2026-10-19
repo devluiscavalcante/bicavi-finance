@@ -3,38 +3,15 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import { addMonths, currentMonth, formatMonth, isValidMonth, monthOf, todayIso } from '../format'
 import { ChevronLeft, ChevronRight, LogOut, Plus, Tag } from '../icons'
+import { cachedMonth, clearMonthCache, fetchMonth, prefetchMonth, type MonthData, type MonthResult } from '../monthCache'
 import { MonthPicker } from '../MonthPicker'
 import { PullToRefresh } from '../PullToRefresh'
 import { TransactionSheet } from '../TransactionSheet'
-import type {
-  CardTotal, MonthlySummaryResponse, PaymentRequest, PeriodResponse, TransactionResponse, UserResponse,
-} from '../types'
+import type { CardTotal, PaymentRequest, PeriodResponse, TransactionResponse, UserResponse } from '../types'
 import { CategoryBreakdown } from './month/CategoryBreakdown'
 import { InvoicesCard } from './month/InvoicesCard'
 import { MonthHero } from './month/MonthHero'
 import { TransactionList, type Filter } from './month/TransactionList'
-
-interface MonthData {
-  summary: MonthlySummaryResponse
-  transactions: TransactionResponse[]
-}
-
-// Resultado da última busca, junto com o mês a que ele pertence.
-type MonthResult = { month: string } & ({ data: MonthData } | { error: string })
-
-// Resumo e transações do mês. Nunca rejeita: um erro vira { error }.
-// As duas chamadas são independentes: Promise.all faz as duas ao mesmo tempo.
-function loadMonth(month: string): Promise<MonthResult> {
-  return Promise.all([
-    api<MonthlySummaryResponse>(`/api/reports/monthly-summary?month=${month}`),
-    api<TransactionResponse[]>(`/api/transactions?month=${month}`),
-  ])
-    .then(([summary, transactions]): MonthResult => ({ month, data: { summary, transactions } }))
-    .catch((e): MonthResult => ({
-      month,
-      error: e instanceof ApiError ? e.message : 'Não foi possível conectar ao servidor',
-    }))
-}
 
 // Painel fechado, aberto para criar, ou aberto editando uma transação.
 type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
@@ -91,7 +68,11 @@ export function MonthPage() {
 
   // Derivado, não armazenado: se o resultado é de outro mês, o atual ainda está
   // carregando. Assim não precisamos "zerar" o estado ao trocar de mês.
-  const current = result?.month === month ? result : null
+  // Enquanto carrega, mostra o que estiver no cache (mês já visto ou pré-carregado);
+  // sem cache, o skeleton. A busca nova substitui quando chegar.
+  const cached = cachedMonth(month)
+  const current: MonthResult | null = result?.month === month ? result : cached ? { month, data: cached } : null
+  const hasData = current !== null && 'data' in current
 
   // Limites vêm do backend (GET /api/period). Meses "2026-10" comparam como texto.
   // Enquanto o período não chega, nada é editável (o "+" só aparece depois).
@@ -109,7 +90,7 @@ export function MonthPage() {
     // DEPOIS da do mês novo. A flag descarta respostas de um mês que já saiu da tela.
     let ignore = false
 
-    loadMonth(month).then(loaded => {
+    fetchMonth(month).then(loaded => {
       if (!ignore) setResult(loaded)
     })
 
@@ -118,12 +99,28 @@ export function MonthPage() {
     }
   }, [month, reloadKey])
 
+  // Com o mês na tela, já busca o anterior e o próximo (se estiverem nos limites):
+  // swipe e setas abrem na hora. prefetchMonth não repete o que já tem ou já está buscando.
+  useEffect(() => {
+    if (!period || !hasData) return
+    if (month > period.oldestVisibleMonth) prefetchMonth(addMonths(month, -1))
+    if (month < period.lastMonth) prefetchMonth(addMonths(month, 1))
+  }, [month, period, hasData])
+
+  // Depois de qualquer alteração: limpa o cache (outros meses podem ter mudado,
+  // ex.: parcelas) e busca de novo o mês da tela.
+  function reloadAll() {
+    clearMonthCache()
+    setReloadKey(k => k + 1)
+  }
+
   // Puxar para atualizar: busca de novo o mês E o período (o app pode ficar
   // aberto de um dia para o outro, e o primeiro mês editável mudar).
   // Os dados antigos ficam na tela até os novos chegarem.
   async function refresh() {
+    clearMonthCache()
     const [loaded, newPeriod] = await Promise.all([
-      loadMonth(month),
+      fetchMonth(month),
       api<PeriodResponse>('/api/period').catch(() => null),
     ])
     setResult(loaded)
@@ -204,6 +201,7 @@ export function MonthPage() {
   }
 
   function handleLogout() {
+    clearMonthCache()
     clearToken()
     navigate('/login', { replace: true })
   }
@@ -215,16 +213,17 @@ export function MonthPage() {
     setHighlightId(tx.id)
     const target = monthOf(tx.occurredOn)
     if (target !== month) {
+      clearMonthCache()
       setSlide(null)
       setSearchParams({ month: target })
     } else {
-      setReloadKey(k => k + 1)
+      reloadAll()
     }
   }
 
   function handleDeleted() {
     setSheet({ mode: 'closed' })
-    setReloadKey(k => k + 1)
+    reloadAll()
   }
 
   // Nova transação olhando outro mês (ex.: planejando dezembro): começa no dia 1º dele.
@@ -283,7 +282,7 @@ export function MonthPage() {
             filter={filter}
             onFilterChange={setFilter}
             onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
-            onChanged={() => setReloadKey(k => k + 1)}
+            onChanged={reloadAll}
           />
         )}
       </div>
