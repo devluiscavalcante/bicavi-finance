@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type TouchEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent, type TouchEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError, clearToken } from '../api'
 import { addMonths, currentMonth, formatMonth, isValidMonth, monthOf, todayIso } from '../format'
 import { ChevronLeft, ChevronRight, LogOut, Plus, Tag } from '../icons'
+import { MonthPicker } from '../MonthPicker'
 import { PullToRefresh } from '../PullToRefresh'
 import { TransactionSheet } from '../TransactionSheet'
 import type {
@@ -45,6 +46,10 @@ const SWIPE_RATIO = 1.5
 const SWIPE_MAX_MS = 700
 // No Safari, arrastar a partir da borda é o "voltar" do navegador: ignoramos.
 const EDGE_PX = 24
+// Segurar o título do mês por esse tempo abre o carrossel. Mexer o dedo mais
+// que LONG_PRESS_SLOP_PX antes disso cancela (era rolagem ou swipe, não "segurar").
+const LONG_PRESS_MS = 450
+const LONG_PRESS_SLOP_PX = 10
 
 export function MonthPage() {
   const navigate = useNavigate()
@@ -66,6 +71,23 @@ export function MonthPage() {
   const [slide, setSlide] = useState<'next' | 'prev' | null>(null)
   // Ponto onde o dedo encostou. useRef (e não useState): mudar não precisa redesenhar a tela.
   const touchStart = useRef<{ x: number; y: number; time: number } | null>(null)
+  // Carrossel de meses: null = fechado; senão, a altura (px) onde ele abre e o
+  // dedo que o abriu (continua arrastando a faixa sem soltar; null pelo teclado).
+  const [picker, setPicker] = useState<{ top: number; dragPointerId: number | null } | null>(null)
+  const longPress = useRef<{ x: number; y: number; timer: number } | null>(null)
+  const titleRef = useRef<HTMLButtonElement>(null)
+
+  // No iPhone, segurar o dedo inicia a seleção de texto do iOS, e arrastar depois
+  // estende a seleção em vez de girar o carrossel. preventDefault no touchstart
+  // desliga esse gesto nativo (e o menu "Copiar"). Precisa ser um listener nativo
+  // com passive: false: o onTouchStart do React é passivo e ignora o preventDefault.
+  useEffect(() => {
+    const title = titleRef.current
+    if (!title) return
+    const block = (e: globalThis.TouchEvent) => e.preventDefault()
+    title.addEventListener('touchstart', block, { passive: false })
+    return () => title.removeEventListener('touchstart', block)
+  }, [])
 
   // Derivado, não armazenado: se o resultado é de outro mês, o atual ainda está
   // carregando. Assim não precisamos "zerar" o estado ao trocar de mês.
@@ -115,10 +137,51 @@ export function MonthPage() {
     setSearchParams({ month: addMonths(month, delta) })
   }
 
+  // Salto direto para um mês escolhido no carrossel.
+  function jumpToMonth(target: string) {
+    setPicker(null)
+    if (target === month) return
+    setSlide(target > month ? 'next' : 'prev')
+    setSearchParams({ month: target })
+  }
+
+  function openPicker(title: HTMLElement, dragPointerId: number | null) {
+    // Sem os limites do período não dá para montar a lista de meses.
+    if (!period) return
+    setPicker({ top: title.getBoundingClientRect().bottom + 8, dragPointerId })
+  }
+
+  function cancelLongPress() {
+    if (longPress.current) clearTimeout(longPress.current.timer)
+    longPress.current = null
+  }
+
+  function handleTitlePointerDown(e: PointerEvent<HTMLButtonElement>) {
+    cancelLongPress()
+    const title = e.currentTarget
+    const pointerId = e.pointerId
+    const timer = window.setTimeout(() => {
+      longPress.current = null
+      openPicker(title, pointerId)
+    }, LONG_PRESS_MS)
+    longPress.current = { x: e.clientX, y: e.clientY, timer }
+  }
+
+  function handleTitlePointerMove(e: PointerEvent) {
+    const start = longPress.current
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > LONG_PRESS_SLOP_PX) cancelLongPress()
+  }
+
+  // Pelo teclado (Enter/Espaço no título) não existe "segurar": o click já abre.
+  // detail === 0 indica click que não veio de mouse nem de toque.
+  function handleTitleClick(e: MouseEvent<HTMLButtonElement>) {
+    if (e.detail === 0) openPicker(e.currentTarget, null)
+  }
+
   function handleTouchStart(e: TouchEvent) {
     const touch = e.touches[0]
-    // Com o painel aberto o gesto não vale (o toque dentro dele também chega aqui).
-    const ignored = sheet.mode !== 'closed' || e.touches.length !== 1
+    // Com o painel ou o carrossel aberto o gesto não vale (o toque dentro deles também chega aqui).
+    const ignored = sheet.mode !== 'closed' || picker !== null || e.touches.length !== 1
       || touch.clientX < EDGE_PX || touch.clientX > window.innerWidth - EDGE_PX
     touchStart.current = ignored ? null : { x: touch.clientX, y: touch.clientY, time: Date.now() }
   }
@@ -126,7 +189,9 @@ export function MonthPage() {
   function handleTouchEnd(e: TouchEvent) {
     const start = touchStart.current
     touchStart.current = null
-    if (!start) return
+    // O toque que abriu o carrossel (segurando o título) começou com ele fechado;
+    // soltar o dedo depois de girar a faixa não pode virar swipe de trocar mês.
+    if (!start || picker !== null) return
     const touch = e.changedTouches[0]
     const dx = touch.clientX - start.x
     const dy = touch.clientY - start.y
@@ -187,7 +252,16 @@ export function MonthPage() {
           <ChevronLeft />
         </button>
         <div className="month-title">
-          <h1>{formatMonth(month)}</h1>
+          {/* Segurar abre o carrossel de meses. onContextMenu: no Android, segurar
+              abriria o menu do navegador em vez disso. */}
+          <button ref={titleRef} type="button" className="month-title-btn" aria-haspopup="dialog"
+                  title="Segure para escolher o mês"
+                  onPointerDown={handleTitlePointerDown} onPointerMove={handleTitlePointerMove}
+                  onPointerUp={cancelLongPress} onPointerCancel={cancelLongPress}
+                  onPointerLeave={cancelLongPress} onClick={handleTitleClick}
+                  onContextMenu={e => e.preventDefault()}>
+            <h1>{formatMonth(month)}</h1>
+          </button>
           {period && !editable && <span className="badge">Somente leitura</span>}
         </div>
         <button className="icon-btn" onClick={() => goToMonth(1)} aria-label="Próximo mês"
@@ -214,7 +288,19 @@ export function MonthPage() {
         )}
       </div>
 
-      <PullToRefresh onRefresh={refresh} disabled={sheet.mode !== 'closed'} />
+      <PullToRefresh onRefresh={refresh} disabled={sheet.mode !== 'closed' || picker !== null} />
+
+      {picker && period && (
+        <MonthPicker
+          month={month}
+          from={period.oldestVisibleMonth}
+          to={period.lastMonth}
+          top={picker.top}
+          dragPointerId={picker.dragPointerId}
+          onSelect={jumpToMonth}
+          onClose={() => setPicker(null)}
+        />
+      )}
 
       {editable && (
         <button className="fab" onClick={() => setSheet({ mode: 'create' })} aria-label="Nova transação"

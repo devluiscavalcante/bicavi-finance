@@ -45,6 +45,20 @@ export function formatMonth(month: string): string {
   return new Date(year, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 }
 
+// "2026-10" -> "out" (o Intl devolve "out.", o ponto sai).
+export function formatMonthShort(month: string): string {
+  const [year, m] = month.split('-').map(Number)
+  return new Date(year, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+}
+
+// monthRange("2026-11", "2027-02") -> ["2026-11", "2026-12", "2027-01", "2027-02"]
+// Meses "AAAA-MM" comparam certo como texto, então o laço pode usar "<=".
+export function monthRange(from: string, to: string): string[] {
+  const months: string[] = []
+  for (let m = from; m <= to; m = addMonths(m, 1)) months.push(m)
+  return months
+}
+
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   PIX: 'Pix',
   DINHEIRO: 'Dinheiro',

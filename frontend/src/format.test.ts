@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  addMonths, currentMonth, formatDay, formatDayHeading, formatMoney, installmentPreview, isValidMonth,
-  lastDayOfMonth, monthOf, parseAmount, todayIso, transactionTitle,
+  addMonths, currentMonth, formatDay, formatDayHeading, formatMoney, formatMonthShort, installmentPreview,
+  isValidMonth, lastDayOfMonth, monthOf, monthRange, parseAmount, todayIso, transactionTitle,
 } from './format'
 
 // O Intl separa "R$" do número com um espaço INQUEBRÁVEL (\u00a0). Trocamos
@@ -76,6 +76,17 @@ describe('meses', () => {
     expect(isValidMonth('2026-13')).toBe(false)
     expect(isValidMonth('2026-1')).toBe(false)
     expect(isValidMonth(null)).toBe(false)
+  })
+
+  it('monthRange lista os meses de ponta a ponta, atravessando o ano', () => {
+    expect(monthRange('2026-11', '2027-02')).toEqual(['2026-11', '2026-12', '2027-01', '2027-02'])
+    expect(monthRange('2026-10', '2026-10')).toEqual(['2026-10'])
+    expect(monthRange('2026-10', '2026-09')).toEqual([])
+  })
+
+  it('formatMonthShort abrevia o mês sem o ponto', () => {
+    expect(formatMonthShort('2026-10')).toBe('out')
+    expect(formatMonthShort('2027-05')).toBe('mai')
   })
 
   it('monthOf pega o mês de uma data', () => {
