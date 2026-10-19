@@ -4,6 +4,13 @@ import { PULL_THRESHOLD, pullDistance } from './pull'
 
 // Antes disso o dedo mal saiu do lugar e ainda não dá para saber a direção.
 const DIRECTION_LOCK_PX = 10
+// Com o cache, a atualização pode terminar em ~100 ms e o ícone só piscaria.
+// Ele gira pelo menos esse tempo, para dar para ver que algo aconteceu.
+const MIN_SPIN_MS = 400
+// Duração da volta do indicador para cima (a mesma transição do .ptr.settling no CSS).
+const SETTLE_MS = 450
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // "Puxar para atualizar": com a página no topo, arrastar o dedo para baixo e soltar.
 // O app instalado no iPhone (PWA) não tem esse gesto nativo, então ele é feito aqui.
@@ -16,6 +23,12 @@ export function PullToRefresh({ onRefresh, disabled }: {
 }) {
   const [pull, setPull] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  // Dedo arrastando: o indicador segue o dedo, sem transição. Solto: ele desliza.
+  const [dragging, setDragging] = useState(false)
+  // Voltando para cima depois de soltar. Fica na tela até a animação acabar:
+  // 'done' depois de atualizar (o ícone continua girando enquanto some),
+  // 'cancel' quando soltou antes do ponto de atualizar.
+  const [closing, setClosing] = useState<'done' | 'cancel' | null>(null)
 
   // A função muda a cada render da página; guardá-la num ref evita refazer
   // os listeners (e perder um gesto no meio) toda vez que isso acontece.
@@ -51,20 +64,25 @@ export function PullToRefresh({ onRefresh, disabled }: {
         }
       }
       distance = pullDistance(dy)
+      setDragging(true)
+      setClosing(null)
       setPull(distance)
     }
 
     function handleEnd() {
       if (!start) return
       start = null
+      setDragging(false)
       if (distance < PULL_THRESHOLD) {
+        setClosing('cancel')
         setPull(0)
         return
       }
       setRefreshing(true)
       setPull(PULL_THRESHOLD)
-      onRefreshRef.current().finally(() => {
+      Promise.all([onRefreshRef.current(), wait(MIN_SPIN_MS)]).finally(() => {
         setRefreshing(false)
+        setClosing('done')
         setPull(0)
       })
     }
@@ -82,15 +100,27 @@ export function PullToRefresh({ onRefresh, disabled }: {
     }
   }, [disabled, refreshing])
 
-  if (pull === 0 && !refreshing) return null
+  // Terminada a volta, tira o indicador da tela. Um timer, e não o evento
+  // transitionend: com "reduzir movimento" ligado não há transição e o evento
+  // nunca dispararia.
+  useEffect(() => {
+    if (!closing) return
+    const timer = setTimeout(() => setClosing(null), SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [closing])
+
+  if (pull === 0 && !refreshing && !closing) return null
 
   const progress = Math.min(1, pull / PULL_THRESHOLD)
+  const spinning = refreshing || closing === 'done'
   return (
-    <div className="ptr" role="status" aria-label={refreshing ? 'Atualizando' : 'Solte para atualizar'}
-         style={{ transform: `translate(-50%, ${pull}px)`, opacity: progress }}>
+    <div className={dragging ? 'ptr' : 'ptr settling'} role="status"
+         aria-label={refreshing ? 'Atualizando' : 'Solte para atualizar'}
+         // Cresce de 60% a 100% conforme puxa (e encolhe de volta ao sumir).
+         style={{ transform: `translate(-50%, ${pull}px) scale(${0.6 + 0.4 * progress})`, opacity: progress }}>
       {/* Enquanto puxa, o ícone gira junto com o dedo; atualizando, gira sozinho. */}
-      <span className={refreshing ? 'ptr-icon spinning' : 'ptr-icon'}
-            style={refreshing ? undefined : { transform: `rotate(${progress * 270}deg)` }}>
+      <span className={spinning ? 'ptr-icon spinning' : 'ptr-icon'}
+            style={spinning ? undefined : { transform: `rotate(${progress * 270}deg)` }}>
         <RefreshCw />
       </span>
     </div>

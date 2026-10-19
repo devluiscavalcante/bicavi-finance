@@ -712,6 +712,13 @@ button.tx-row:active {
   pointer-events: none;
 }
 
+/* Dedo solto: desliza até a posição de atualizar ou de volta para cima, sumindo
+   devagar. 0.45s = SETTLE_MS no PullToRefresh. Arrastando, fica sem transição
+   para acompanhar o dedo sem atraso. */
+.ptr.settling {
+  transition: transform 0.45s var(--ease), opacity 0.35s ease;
+}
+
 .ptr-icon {
   display: grid;
 }
@@ -722,7 +729,7 @@ button.tx-row:active {
 }
 
 .ptr-icon.spinning {
-  animation: spin 0.8s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
