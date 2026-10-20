@@ -7,6 +7,9 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/inter'
 import './index.css'
 import App from './App.tsx'
+import { trackViewport } from './viewport'
+
+trackViewport()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

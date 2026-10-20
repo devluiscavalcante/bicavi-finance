@@ -95,7 +95,8 @@ html {
 body {
   margin: 0;
   background: var(--bg);
-  min-height: 100dvh;
+  /* --app-height: altura visível medida em viewport.ts; 100dvh é só a reserva. */
+  min-height: var(--app-height, 100dvh);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -375,7 +376,7 @@ button {
 
 /* ---------- Telas de login/cadastro ---------- */
 .auth {
-  min-height: 100dvh;
+  min-height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -835,12 +836,14 @@ main:has(.fab) {
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
-/* Painel: <dialog> preso na parte de baixo da tela. */
+/* Painel: <dialog> preso na parte de baixo da área visível. Com o teclado
+   aberto, --keyboard-inset (viewport.ts) sobe o painel para cima do teclado e
+   --app-height encolhe a altura máxima: o botão Salvar nunca fica escondido. */
 .sheet {
-  margin: auto auto 0;
+  margin: auto auto var(--keyboard-inset, 0px);
   width: 100%;
   max-width: var(--col);
-  max-height: 92dvh;
+  max-height: calc(var(--app-height, 100dvh) * 0.92);
   /* Com o celular deitado o formulário não cabe na altura: rola dentro do painel. */
   overflow-y: auto;
   padding: 0;
@@ -1692,6 +1695,6 @@ button.pay-toggle:disabled {
   }
 
   .sheet {
-    max-height: 100dvh;
+    max-height: var(--app-height, 100dvh);
   }
 }
