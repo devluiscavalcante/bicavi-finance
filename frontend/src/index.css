@@ -253,6 +253,43 @@ input:focus {
   box-shadow: 0 0 0 4px var(--surface-2);
 }
 
+/* Senha com o "olho" dentro do campo, à direita (ver PasswordInput.tsx). */
+.password-field {
+  position: relative;
+  display: flex;
+}
+
+.password-field input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 48px; /* o texto não passa por baixo do botão */
+}
+
+/* 44px de área de toque (recomendação da Apple), com o ícone de 18px no meio. */
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.password-toggle:hover {
+  color: var(--text);
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 .field-error,
 .error {
   color: var(--expense);

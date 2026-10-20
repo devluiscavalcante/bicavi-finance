@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../api'
 import { register } from '../auth'
 import { AuthLayout } from '../AuthLayout'
+import { PasswordInput } from '../PasswordInput'
 
 export function RegisterPage() {
   const navigate = useNavigate()
@@ -56,8 +57,8 @@ export function RegisterPage() {
         {fieldErrors.email && <p className="field-error">{fieldErrors.email}</p>}
         <label>
           Senha (mínimo 8 caracteres)
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                 autoComplete="new-password" minLength={8} maxLength={72} required />
+          <PasswordInput value={password} onChange={e => setPassword(e.target.value)}
+                         autoComplete="new-password" minLength={8} maxLength={72} required />
         </label>
         {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
         {error && <p className="error">{error}</p>}

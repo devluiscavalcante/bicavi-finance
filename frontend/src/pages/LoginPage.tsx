@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../api'
 import { login } from '../auth'
 import { AuthLayout } from '../AuthLayout'
+import { PasswordInput } from '../PasswordInput'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -40,8 +41,8 @@ export function LoginPage() {
         </label>
         <label>
           Senha
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                 autoComplete="current-password" required />
+          <PasswordInput value={password} onChange={e => setPassword(e.target.value)}
+                         autoComplete="current-password" required />
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading}>
