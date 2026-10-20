@@ -90,10 +90,23 @@ html {
   overscroll-behavior-y: none;
 }
 
+/* Como num app nativo: segurar o dedo não seleciona texto nem abre o menu de
+   copiar/compartilhar do iOS (touch-callout). */
 body {
   margin: 0;
   background: var(--bg);
   min-height: 100dvh;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Campos de digitação continuam selecionáveis: sem isto o iOS nem deixa digitar,
+   e a pessoa precisa poder selecionar o que escreveu para corrigir. */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 main {
@@ -1128,7 +1141,7 @@ a.icon-btn {
 }
 
 /* O título é um botão (segurar abre o carrossel), mas continua parecendo texto.
-   user-select/touch-callout: segurar no iPhone não seleciona o texto nem abre o menu. */
+   Segurar não seleciona o texto: vale para a página toda (regra do body). */
 .month-title-btn {
   background: none;
   border: none;
@@ -1137,9 +1150,6 @@ a.icon-btn {
   color: inherit;
   font: inherit;
   cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
   transition: transform 0.45s var(--ease), background 0.2s;
 }
 
@@ -1164,10 +1174,6 @@ a.icon-btn {
   color: var(--text);
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
   transform-origin: top center;
-  /* Arrastar pelos meses nunca seleciona texto nem abre o menu do iOS. */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 .month-picker[open] {
