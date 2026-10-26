@@ -33,6 +33,25 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             """)
     List<Transaction> findInPeriod(Long userId, LocalDate start, LocalDate end, Long categoryId);
 
+    // Receitas e despesas somadas por mês, para o gráfico de evolução.
+    //
+    // GROUP BY: o banco devolve UMA linha por mês, em vez de todas as transações.
+    // SUM(CASE ...): uma única passada soma receitas e despesas em colunas separadas
+    // (sem CASE, seriam duas consultas ou um GROUP BY também por tipo).
+    // Mês sem nenhuma transação não gera linha: quem chama preenche com zero.
+    @Query("""
+            SELECT new com.bicavi.transaction.MonthlyTotals(
+                YEAR(t.occurredOn), MONTH(t.occurredOn),
+                SUM(CASE WHEN t.type = com.bicavi.transaction.TransactionType.INCOME THEN t.amount ELSE 0 END),
+                SUM(CASE WHEN t.type = com.bicavi.transaction.TransactionType.EXPENSE THEN t.amount ELSE 0 END))
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.occurredOn >= :start AND t.occurredOn < :end
+            GROUP BY YEAR(t.occurredOn), MONTH(t.occurredOn)
+            ORDER BY YEAR(t.occurredOn), MONTH(t.occurredOn)
+            """)
+    List<MonthlyTotals> sumByMonth(Long userId, LocalDate start, LocalDate end);
+
     // Parcelas da mesma compra DEPOIS da indicada (para "esta e as próximas").
     // userId no filtro, como em toda consulta: grupo de outro usuário não aparece.
     @Query("""

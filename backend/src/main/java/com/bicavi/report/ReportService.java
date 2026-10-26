@@ -2,7 +2,9 @@ package com.bicavi.report;
 
 import com.bicavi.card.Card;
 import com.bicavi.category.Category;
+import com.bicavi.common.BusinessRuleException;
 import com.bicavi.period.PeriodPolicy;
+import com.bicavi.transaction.MonthlyTotals;
 import com.bicavi.transaction.PaymentMethod;
 import com.bicavi.transaction.Transaction;
 import com.bicavi.transaction.TransactionRepository;
@@ -12,10 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 // Cálculos financeiros determinísticos. A IA usará estes resultados,
 // nunca fará as contas por conta própria.
@@ -29,6 +33,8 @@ public class ReportService {
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final String UNCATEGORIZED = "Sem categoria";
     private static final String CREDIT_WITHOUT_CARD = "Crédito sem cartão";
+    // Limite do gráfico de evolução: o padrão da tela é 13 meses (6 + atual + 6).
+    static final int MAX_TREND_MONTHS = 24;
 
     private final TransactionRepository transactions;
     private final PeriodPolicy period;
@@ -56,6 +62,45 @@ public class ReportService {
                 income.subtract(expense),
                 expensesByCategory(all),
                 expensesByCard(all));
+    }
+
+    // Totais mês a mês, de "from" até "to" (inclusive), para o gráfico de evolução.
+    //
+    // Aqui a soma é feita no banco (GROUP BY), não em Java como no monthlySummary:
+    // são vários meses de uma vez e só interessam os totais, não as transações.
+    @Transactional(readOnly = true)
+    public List<MonthTrend> monthlyTrend(Long userId, YearMonth from, YearMonth to) {
+        period.checkVisible(from);
+        period.checkVisible(to);
+        if (from.isAfter(to)) {
+            throw new BusinessRuleException("O mês inicial não pode ser depois do final");
+        }
+        long months = ChronoUnit.MONTHS.between(from, to) + 1;
+        if (months > MAX_TREND_MONTHS) {
+            throw new BusinessRuleException("Consulte no máximo " + MAX_TREND_MONTHS + " meses por vez");
+        }
+
+        Map<YearMonth, MonthlyTotals> byMonth = transactions
+                .sumByMonth(userId, from.atDay(1), to.plusMonths(1).atDay(1))
+                .stream()
+                .collect(Collectors.toMap(row -> YearMonth.of(row.year(), row.month()), row -> row));
+
+        // O banco só devolve meses que têm transações. Percorremos o intervalo
+        // inteiro para que mês vazio apareça zerado (senão o gráfico "pula" meses).
+        return Stream.iterate(from, month -> month.plusMonths(1))
+                .limit(months)
+                .map(month -> toTrend(month, byMonth.get(month)))
+                .toList();
+    }
+
+    private static MonthTrend toTrend(YearMonth month, MonthlyTotals row) {
+        if (row == null) {
+            return new MonthTrend(month, ZERO, ZERO, ZERO);
+        }
+        // setScale(2): um SUM só de zeros (ELSE 0) volta como "0", sem casas decimais.
+        BigDecimal income = row.income().setScale(2);
+        BigDecimal expense = row.expense().setScale(2);
+        return new MonthTrend(month, income, expense, income.subtract(expense));
     }
 
     private static BigDecimal sum(List<Transaction> all, TransactionType type) {

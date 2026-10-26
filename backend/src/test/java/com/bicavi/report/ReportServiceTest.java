@@ -5,6 +5,7 @@ import com.bicavi.category.Category;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.period.PeriodPolicy;
 import com.bicavi.period.TestClocks;
+import com.bicavi.transaction.MonthlyTotals;
 import com.bicavi.transaction.PaymentMethod;
 import com.bicavi.transaction.TestTransactions;
 import com.bicavi.transaction.Transaction;
@@ -233,5 +234,58 @@ class ReportServiceTest {
     private static Transaction paid(Transaction tx) {
         tx.markPaid(DAY);
         return tx;
+    }
+
+    // --- Evolução mês a mês ---
+
+    @Test
+    void trendFillsMonthsWithoutTransactionsWithZeros() {
+        YearMonth from = YearMonth.of(2026, 9);
+        YearMonth to = YearMonth.of(2026, 11);
+        when(transactions.sumByMonth(USER, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 1)))
+                .thenReturn(List.of(
+                        new MonthlyTotals(2026, 9, new BigDecimal("5000.00"), new BigDecimal("4200.00")),
+                        // Outubro não veio do banco: nenhuma transação.
+                        new MonthlyTotals(2026, 11, new BigDecimal("0"), new BigDecimal("300.00"))));
+
+        List<MonthTrend> trend = service.monthlyTrend(USER, from, to);
+
+        assertThat(trend).extracting(MonthTrend::month)
+                .containsExactly(YearMonth.of(2026, 9), YearMonth.of(2026, 10), YearMonth.of(2026, 11));
+        assertThat(trend.get(0).balance()).isEqualByComparingTo("800.00");
+        assertThat(trend.get(1).totalIncome()).isEqualTo(new BigDecimal("0.00"));
+        assertThat(trend.get(1).balance()).isEqualTo(new BigDecimal("0.00"));
+        // O "0" do banco vira "0.00", e o saldo pode ser negativo.
+        assertThat(trend.get(2).totalIncome()).isEqualTo(new BigDecimal("0.00"));
+        assertThat(trend.get(2).balance()).isEqualTo(new BigDecimal("-300.00"));
+    }
+
+    @Test
+    void trendOfASingleMonthIsAllowed() {
+        assertThat(service.monthlyTrend(USER, OCTOBER, OCTOBER)).hasSize(1);
+    }
+
+    @Test
+    void trendRejectsFromAfterTo() {
+        assertThatThrownBy(() -> service.monthlyTrend(USER, YearMonth.of(2026, 11), OCTOBER))
+                .isInstanceOf(BusinessRuleException.class);
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void trendRejectsMonthOutsideTheConsultationWindow() {
+        assertThatThrownBy(() -> service.monthlyTrend(USER, YearMonth.of(2026, 3), OCTOBER))
+                .isInstanceOf(BusinessRuleException.class);
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void trendRejectsMoreThanTheMaximumOfMonths() {
+        YearMonth from = YearMonth.of(2026, 4);
+
+        assertThat(service.monthlyTrend(USER, from, from.plusMonths(ReportService.MAX_TREND_MONTHS - 1)))
+                .hasSize(ReportService.MAX_TREND_MONTHS);
+        assertThatThrownBy(() -> service.monthlyTrend(USER, from, from.plusMonths(ReportService.MAX_TREND_MONTHS)))
+                .isInstanceOf(BusinessRuleException.class);
     }
 }

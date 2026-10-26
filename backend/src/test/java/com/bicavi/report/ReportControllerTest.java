@@ -74,4 +74,37 @@ class ReportControllerTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
+
+    @Test
+    void returnsMonthlyTrendOfLoggedUserAsJson() throws Exception {
+        when(service.monthlyTrend(USER, YearMonth.of(2026, 9), YearMonth.of(2026, 10))).thenReturn(List.of(
+                new MonthTrend(YearMonth.of(2026, 9), new BigDecimal("5000.00"), new BigDecimal("5300.00"),
+                        new BigDecimal("-300.00")),
+                new MonthTrend(YearMonth.of(2026, 10), new BigDecimal("0.00"), new BigDecimal("0.00"),
+                        new BigDecimal("0.00"))));
+
+        mockMvc.perform(get("/api/reports/monthly-trend").with(loggedUser())
+                        .param("from", "2026-09").param("to", "2026-10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].month").value("2026-09"))
+                .andExpect(jsonPath("$[0].totalIncome").value(5000.00))
+                .andExpect(jsonPath("$[0].totalExpense").value(5300.00))
+                .andExpect(jsonPath("$[0].balance").value(-300.00))
+                .andExpect(jsonPath("$[1].month").value("2026-10"));
+    }
+
+    @Test
+    void trendWithoutTokenReturns401() throws Exception {
+        mockMvc.perform(get("/api/reports/monthly-trend").param("from", "2026-09").param("to", "2026-10"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void trendWithoutToReturns400() throws Exception {
+        mockMvc.perform(get("/api/reports/monthly-trend").with(loggedUser()).param("from", "2026-09"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
 }

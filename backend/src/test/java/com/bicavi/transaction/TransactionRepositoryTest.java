@@ -422,6 +422,32 @@ class TransactionRepositoryTest {
     // clear: esvazia o cache do JPA, forçando a próxima leitura a ir ao banco.
     // Sem o clear, o JPA devolveria o objeto que está em memória, e não
     // veríamos o efeito do ON DELETE SET NULL, que acontece só no banco.
+    @Test
+    void sumsIncomeAndExpenseByMonthOnlyForTheUserAndPeriod() {
+        LocalDate sep30 = LocalDate.of(2026, 9, 30);
+        LocalDate dec1 = LocalDate.of(2026, 12, 1);
+        transactions.save(income("5000.00").user(alice).on(OCT_1).build());
+        transactions.save(expense("100.10").user(alice).on(OCT_1).build());
+        transactions.save(expense("0.20").user(alice).on(DAY).build());
+        transactions.save(expense("300.00").user(alice).credit(aliceCard).on(NOV_1).build());
+        transactions.save(expense("999.00").user(alice).on(sep30).build()); // antes do período
+        transactions.save(expense("999.00").user(alice).on(dec1).build());  // fim é exclusivo
+        transactions.save(expense("999.00").user(bob).on(DAY).build());     // outro usuário
+        flushAndClear();
+
+        List<MonthlyTotals> totals = transactions.sumByMonth(alice, OCT_1, dec1);
+
+        assertThat(totals).hasSize(2);
+        assertThat(totals.get(0).year()).isEqualTo(2026);
+        assertThat(totals.get(0).month()).isEqualTo(10);
+        assertThat(totals.get(0).income()).isEqualByComparingTo("5000.00");
+        assertThat(totals.get(0).expense()).isEqualByComparingTo("100.30");
+        // Novembro só tem despesa: a receita vem 0 (do ELSE 0), não null.
+        assertThat(totals.get(1).month()).isEqualTo(11);
+        assertThat(totals.get(1).income()).isEqualByComparingTo("0");
+        assertThat(totals.get(1).expense()).isEqualByComparingTo("300.00");
+    }
+
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
