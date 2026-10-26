@@ -65,6 +65,15 @@ export interface MonthlySummaryResponse {
   expensesByCard: CardTotal[] // da maior fatura para a menor
 }
 
+// Um mês do gráfico de evolução (GET /api/reports/monthly-trend).
+// Mês sem transações vem com tudo zerado, não falta na lista.
+export interface MonthTrend {
+  month: string // "2026-10"
+  totalIncome: number
+  totalExpense: number
+  balance: number // pode ser negativo
+}
+
 // Limites de período calculados pelo backend (GET /api/period).
 // Meses no formato "2026-10": comparar como texto funciona ("2026-09" < "2026-10").
 export interface PeriodResponse {

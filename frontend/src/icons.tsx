@@ -44,6 +44,15 @@ export const Wallet = () => (
   </Icon>
 )
 
+export const BarChart = () => (
+  <Icon>
+    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+    <path d="M18 17V9" />
+    <path d="M13 17V5" />
+    <path d="M8 17v-3" />
+  </Icon>
+)
+
 export const Plus = () => <Icon><path d="M12 5v14" /><path d="M5 12h14" /></Icon>
 
 export const Close = () => <Icon><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>

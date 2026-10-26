@@ -12,6 +12,7 @@ import { CategoryBreakdown } from './month/CategoryBreakdown'
 import { InvoicesCard } from './month/InvoicesCard'
 import { MonthHero } from './month/MonthHero'
 import { TransactionList, type Filter } from './month/TransactionList'
+import { TrendSheet } from './month/TrendSheet'
 
 // Painel fechado, aberto para criar, ou aberto editando uma transação.
 type SheetState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; transaction: TransactionResponse }
@@ -52,6 +53,8 @@ export function MonthPage() {
   // dedo que o abriu (continua arrastando a faixa sem soltar; null pelo teclado).
   const [picker, setPicker] = useState<{ top: number; dragPointerId: number | null } | null>(null)
   const longPress = useRef<{ x: number; y: number; timer: number } | null>(null)
+  // Painel de evolução do saldo (tocar no saldo do mês).
+  const [trendOpen, setTrendOpen] = useState(false)
   const titleRef = useRef<HTMLButtonElement>(null)
 
   // No iPhone, segurar o dedo inicia a seleção de texto do iOS, e arrastar depois
@@ -178,7 +181,7 @@ export function MonthPage() {
   function handleTouchStart(e: TouchEvent) {
     const touch = e.touches[0]
     // Com o painel ou o carrossel aberto o gesto não vale (o toque dentro deles também chega aqui).
-    const ignored = sheet.mode !== 'closed' || picker !== null || e.touches.length !== 1
+    const ignored = sheet.mode !== 'closed' || picker !== null || trendOpen || e.touches.length !== 1
       || touch.clientX < EDGE_PX || touch.clientX > window.innerWidth - EDGE_PX
     touchStart.current = ignored ? null : { x: touch.clientX, y: touch.clientY, time: Date.now() }
   }
@@ -283,11 +286,12 @@ export function MonthPage() {
             onFilterChange={setFilter}
             onSelect={tx => setSheet({ mode: 'edit', transaction: tx })}
             onChanged={reloadAll}
+            onOpenTrend={() => setTrendOpen(true)}
           />
         )}
       </div>
 
-      <PullToRefresh onRefresh={refresh} disabled={sheet.mode !== 'closed' || picker !== null} />
+      <PullToRefresh onRefresh={refresh} disabled={sheet.mode !== 'closed' || picker !== null || trendOpen} />
 
       {picker && period && (
         <MonthPicker
@@ -299,6 +303,10 @@ export function MonthPage() {
           onSelect={jumpToMonth}
           onClose={() => setPicker(null)}
         />
+      )}
+
+      {trendOpen && period && (
+        <TrendSheet month={month} period={period} onClose={() => setTrendOpen(false)} />
       )}
 
       {editable && (
@@ -335,7 +343,7 @@ function MonthSkeleton() {
 // a fatura escolhida aparece selecionada nas faturas E filtra a lista.
 // Cada bloco cuida do próprio estado ("Ver todas", "Ver mais").
 function MonthContent({
-  data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect, onChanged,
+  data: { summary, transactions }, highlightId, editable, filter, onFilterChange, onSelect, onChanged, onOpenTrend,
 }: {
   data: MonthData
   highlightId: number | null
@@ -344,6 +352,7 @@ function MonthContent({
   onFilterChange: (f: Filter) => void
   onSelect: (tx: TransactionResponse) => void
   onChanged: () => void // algo mudou no backend: a tela busca o mês de novo
+  onOpenTrend: () => void
 }) {
   // Fatura tocada: a lista mostra só as compras daquele cartão (para conferir com o banco).
   const [cardFilter, setCardFilter] = useState<CardTotal | null>(null)
@@ -395,7 +404,7 @@ function MonthContent({
 
   return (
     <>
-      <MonthHero summary={summary} />
+      <MonthHero summary={summary} onOpenTrend={onOpenTrend} />
       <CategoryBreakdown categories={summary.expensesByCategory} totalExpense={summary.totalExpense} />
       {payError && <p className="error" role="alert" style={{ marginTop: 16 }}>{payError}</p>}
       <InvoicesCard invoices={summary.expensesByCard} selected={cardFilter} onToggle={toggleCardFilter}
