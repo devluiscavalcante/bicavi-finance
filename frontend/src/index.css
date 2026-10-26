@@ -1,6 +1,6 @@
 /* ---------- Design tokens ----------
    Todas as cores, raios e sombras ficam aqui. Os componentes só usam var(--...),
-   então trocar o tema (claro/escuro) é só redefinir as variáveis.
+   então trocar o tema (claro/escuro/rosa) é só redefinir as variáveis.
    Paleta minimalista: cinzas neutros; cor só onde carrega significado
    (verde = entrou dinheiro, vermelho = saiu). */
 :root {
@@ -29,6 +29,9 @@
   --dot: rgb(24 24 27 / 0.09);
   --glow-1: rgb(161 161 170 / 0.35);
   --glow-2: rgb(212 212 216 / 0.5);
+  /* Cor das partículas do login (ParticleField.tsx), em "R G B" para o canvas
+     poder somar a transparência. */
+  --particle: 24 24 27;
 
   --radius-sm: 12px;
   --radius: 18px;
@@ -46,36 +49,72 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #09090b;
-    --surface: rgb(24 24 27 / 0.75);
-    --surface-solid: #18181b;
-    --surface-2: #27272a;
-    --text: #fafafa;
-    --muted: #a1a1aa;
-    --border: #27272a;
+/* Escuro e rosa: escolhidos no botão de tema (theme.ts põe data-theme no <html>).
+   Sem escolha salva, o theme.ts usa o tema do sistema. */
+:root[data-theme='dark'] {
+  --bg: #09090b;
+  --surface: rgb(24 24 27 / 0.75);
+  --surface-solid: #18181b;
+  --surface-2: #27272a;
+  --text: #fafafa;
+  --muted: #a1a1aa;
+  --border: #27272a;
 
-    --primary: #fafafa;
-    --primary-hover: #d4d4d8;
-    --on-primary: #09090b;
+  --primary: #fafafa;
+  --primary-hover: #d4d4d8;
+  --on-primary: #09090b;
 
-    --hero-bg: #fafafa;
-    --hero-text: #09090b;
-    --hero-muted: rgb(9 9 11 / 0.55);
-    --hero-chip: rgb(0 0 0 / 0.06);
+  --hero-bg: #fafafa;
+  --hero-text: #09090b;
+  --hero-muted: rgb(9 9 11 / 0.55);
+  --hero-chip: rgb(0 0 0 / 0.06);
 
-    --income: #4ade80;
-    --income-soft: rgb(74 222 128 / 0.1);
-    --expense: #f87171;
-    --expense-soft: rgb(248 113 113 / 0.1);
+  --income: #4ade80;
+  --income-soft: rgb(74 222 128 / 0.1);
+  --expense: #f87171;
+  --expense-soft: rgb(248 113 113 / 0.1);
 
-    --dot: rgb(250 250 250 / 0.07);
-    --glow-1: rgb(113 113 122 / 0.25);
-    --glow-2: rgb(82 82 91 / 0.3);
+  --dot: rgb(250 250 250 / 0.07);
+  --glow-1: rgb(113 113 122 / 0.25);
+  --glow-2: rgb(82 82 91 / 0.3);
 
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-  }
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --particle: 250 250 250;
+}
+
+/* Rosa: fundo rosado, texto ameixa, destaque pink e o cartão do saldo em
+   degradê. Verde e vermelho continuam dizendo entrou/saiu (o vermelho vira
+   um rosa-avermelhado, ainda distinto do pink dos botões). */
+:root[data-theme='pink'] {
+  --bg: #fff1f6;
+  --surface: rgb(255 255 255 / 0.75);
+  --surface-solid: #ffffff;
+  --surface-2: #ffe4ee;
+  --text: #4a1630;
+  --muted: #a35d7f;
+  --border: #fbcfe0;
+
+  --primary: #ec4899;
+  --primary-hover: #db2777;
+  --on-primary: #ffffff;
+
+  /* Usada em "background:", então aceita degradê. */
+  --hero-bg: linear-gradient(135deg, #f472b6, #ec4899 55%, #c084fc);
+  --hero-text: #ffffff;
+  --hero-muted: rgb(255 255 255 / 0.8);
+  --hero-chip: rgb(255 255 255 / 0.2);
+
+  --income: #16a34a;
+  --income-soft: #ecfdf3;
+  --expense: #e11d48;
+  --expense-soft: #fff1f2;
+
+  --dot: rgb(236 72 153 / 0.16);
+  --glow-1: rgb(244 114 182 / 0.4);
+  --glow-2: rgb(192 132 252 / 0.35);
+
+  --shadow: 0 1px 2px rgb(236 72 153 / 0.06), 0 4px 16px rgb(236 72 153 / 0.1);
+  --particle: 236 72 153;
 }
 
 /* ---------- Base ---------- */
@@ -432,6 +471,256 @@ button {
   text-align: center;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* ---------- Tema (botão e detalhes do rosa) ---------- */
+
+/* O ícone novo entra girando a cada troca (ThemeToggle recria o span). */
+.theme-icon {
+  display: grid;
+  place-items: center;
+  animation: theme-in 0.5s var(--ease);
+}
+
+@keyframes theme-in {
+  from {
+    opacity: 0;
+    transform: rotate(-120deg) scale(0.4);
+  }
+}
+
+/* Na tela de login o botão fica no canto, fora do fluxo do formulário. */
+.auth-theme {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 2;
+}
+
+[data-theme='pink'] .brand {
+  color: var(--primary);
+}
+
+[data-theme='pink'] .theme-toggle {
+  color: var(--primary);
+}
+
+/* Orelhinhas de gato no avatar: dois triângulos da mesma cor do círculo. */
+[data-theme='pink'] .avatar {
+  position: relative;
+  /* Branco: a mancha de luz rosa do fundo fica bem atrás do avatar, e um
+     círculo rosado (e as orelhas) sumiria nela. */
+  background: var(--surface-solid);
+  color: var(--primary);
+}
+
+[data-theme='pink'] .avatar::before,
+[data-theme='pink'] .avatar::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  width: 15px;
+  height: 15px;
+  background: inherit;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+[data-theme='pink'] .avatar::before {
+  left: 1px;
+  rotate: -22deg;
+}
+
+[data-theme='pink'] .avatar::after {
+  right: 1px;
+  rotate: 22deg;
+}
+
+/* Patinha no canto do cartão do saldo. Emoji e não imagem: a
+   Content-Security-Policy não libera imagens em data: URI. */
+[data-theme='pink'] .hero::before {
+  content: '🐾';
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 2.6rem;
+  opacity: 0.22;
+  rotate: -18deg;
+  pointer-events: none;
+}
+
+/* Gatinho do login (KittenLogo.tsx). */
+.kitten {
+  --kitten-fur: #ffffff;
+  --kitten-inner: #fbcfe8;
+  --kitten-line: #4a1630;
+  position: relative;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  animation: kitten-pop 0.9s var(--ease) both;
+}
+
+.kitten-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: kitten-bob 3s ease-in-out 0.9s infinite;
+}
+
+.kitten-fur {
+  fill: var(--kitten-fur);
+  stroke: var(--kitten-line);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.kitten-inner {
+  fill: var(--kitten-inner);
+}
+
+.kitten-eye {
+  fill: var(--kitten-line);
+}
+
+.kitten-shine {
+  fill: #ffffff;
+}
+
+.kitten-blush {
+  fill: #f9a8d4;
+}
+
+.kitten-nose {
+  fill: #f472b6;
+}
+
+.kitten-line {
+  fill: none;
+  stroke: var(--kitten-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.kitten-whiskers {
+  stroke-width: 1.5;
+}
+
+/* transform-box: fill-box faz o transform-origin valer em relação ao próprio
+   desenho (sem isso, num SVG ele é medido a partir do canto do <svg>). */
+.kitten-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kitten-blink 4s 1.2s infinite;
+}
+
+.kitten-ear {
+  transform-box: fill-box;
+}
+
+.kitten-ear-left {
+  transform-origin: 80% 100%;
+  animation: kitten-twitch 5s 1.6s infinite;
+}
+
+@keyframes kitten-pop {
+  from {
+    opacity: 0;
+    transform: scale(0) rotate(-25deg);
+  }
+  60% {
+    transform: scale(1.15) rotate(8deg);
+  }
+}
+
+@keyframes kitten-bob {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes kitten-blink {
+  0%,
+  44%,
+  52%,
+  100% {
+    transform: scaleY(1);
+  }
+  48% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes kitten-twitch {
+  0%,
+  88%,
+  100% {
+    transform: rotate(0);
+  }
+  92% {
+    transform: rotate(-16deg);
+  }
+  96% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Coração em CSS: um quadrado girado 45° com dois círculos encostados.
+   "rotate" desenha o coração; "translate" (propriedade separada) é o que anima. */
+.kitten-heart {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + var(--x, 0px));
+  width: 8px;
+  height: 8px;
+  background: #f472b6;
+  rotate: 45deg;
+  opacity: 0;
+  pointer-events: none;
+  animation: heart-float 3.2s ease-out 1s infinite;
+}
+
+.kitten-heart::before,
+.kitten-heart::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.kitten-heart::before {
+  left: -4px;
+}
+
+.kitten-heart::after {
+  top: -4px;
+}
+
+.kitten-heart:nth-child(2) {
+  --x: -16px;
+  animation-delay: 2s;
+  scale: 0.7;
+}
+
+.kitten-heart:nth-child(3) {
+  --x: 14px;
+  animation-delay: 2.9s;
+  scale: 0.85;
+}
+
+@keyframes heart-float {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -34px;
+  }
 }
 
 /* ---------- Tela do mês ---------- */

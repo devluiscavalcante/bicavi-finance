@@ -7,6 +7,7 @@ import { cachedMonth, clearMonthCache, fetchMonth, prefetchMonth, type MonthData
 import { MonthPicker } from '../MonthPicker'
 import { PullToRefresh } from '../PullToRefresh'
 import { TransactionSheet } from '../TransactionSheet'
+import { ThemeToggle } from '../ThemeToggle'
 import type { CardTotal, PaymentRequest, PeriodResponse, TransactionResponse, UserResponse } from '../types'
 import { CategoryBreakdown } from './month/CategoryBreakdown'
 import { InvoicesCard } from './month/InvoicesCard'
@@ -240,6 +241,7 @@ export function MonthPage() {
           <small>Olá,</small>
           <strong>{user?.name ?? '...'}</strong>
         </div>
+        <ThemeToggle />
         <Link to="/categorias" className="icon-btn" aria-label="Categorias" title="Categorias">
           <Tag />
         </Link>

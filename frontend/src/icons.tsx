@@ -53,6 +53,36 @@ export const BarChart = () => (
   </Icon>
 )
 
+export const Sun = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="m4.93 4.93 1.41 1.41" />
+    <path d="m17.66 17.66 1.41 1.41" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="m6.34 17.66-1.41 1.41" />
+    <path d="m19.07 4.93-1.41 1.41" />
+  </Icon>
+)
+
+export const Moon = () => <Icon><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></Icon>
+
+// Carinha de gato (orelhas, olhos, focinho e bigodes): o ícone do tema rosa.
+export const Cat = () => (
+  <Icon>
+    <path d="M5 19.5C3.7 18 3 16.2 3 14.2V4l4.5 3.5a10 10 0 0 1 9 0L21 4v10.2c0 2-.7 3.8-2 5.3a9.5 9.5 0 0 1-14 0Z" />
+    <path d="M9 12v.5" />
+    <path d="M15 12v.5" />
+    <path d="M11.2 15.2h1.6L12 16Z" />
+    <path d="M8 16 4 15" />
+    <path d="M8 17.5 4.5 18.5" />
+    <path d="m16 16 4-1" />
+    <path d="m16 17.5 3.5 1" />
+  </Icon>
+)
+
 export const Plus = () => <Icon><path d="M12 5v14" /><path d="M5 12h14" /></Icon>
 
 export const Close = () => <Icon><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>
