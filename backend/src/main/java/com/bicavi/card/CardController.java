@@ -43,10 +43,11 @@ public class CardController {
         return service.create(CurrentUser.id(jwt), request);
     }
 
+    // PUT substitui o cartão inteiro (nome, bandeira, titular, final, validade e cor).
     @PutMapping("/{id}")
-    public CardResponse rename(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+    public CardResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                                @Valid @RequestBody CardRequest request) {
-        return service.rename(CurrentUser.id(jwt), id, request);
+        return service.update(CurrentUser.id(jwt), id, request);
     }
 
     @DeleteMapping("/{id}")

@@ -1,6 +1,7 @@
 package com.bicavi.report;
 
 import com.bicavi.card.Card;
+import com.bicavi.card.TestCards;
 import com.bicavi.category.Category;
 import com.bicavi.common.BusinessRuleException;
 import com.bicavi.period.PeriodPolicy;
@@ -39,8 +40,8 @@ class ReportServiceTest {
     private final Category salary = new Category(USER, "Salário", TransactionType.INCOME);
     private final Category groceries = new Category(USER, "Mercado", TransactionType.EXPENSE);
     private final Category transport = new Category(USER, "Transporte", TransactionType.EXPENSE);
-    private final Card nubank = new Card(USER, "Nubank");
-    private final Card itau = new Card(USER, "Itaú");
+    private final Card nubank = TestCards.card(USER, "Nubank");
+    private final Card itau = TestCards.card(USER, "Itaú");
 
     @Mock
     private TransactionRepository transactions;

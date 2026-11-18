@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 // Mesmas regras de CategoryService: tudo filtrado pelo dono, nome único na
-// conta sem diferenciar maiúsculas, renomear para o próprio nome não é conflito.
+// conta sem diferenciar maiúsculas, manter o próprio nome não é conflito.
 @Service
 public class CardService {
 
@@ -37,22 +37,26 @@ public class CardService {
     public CardResponse create(Long userId, CardRequest request) {
         String name = request.name().trim();
         ensureNameIsFree(userId, name);
-        return CardResponse.from(repository.save(new Card(userId, name)));
+        Card card = new Card(userId, name, request.brand(), request.holderName().trim(), request.lastFour(),
+                request.expiryMonth(), request.expiryYear(), request.color());
+        return CardResponse.from(repository.save(card));
     }
 
-    // Como na categoria: renomear vale para todos os meses, inclusive os fechados.
-    // O nome é só um rótulo; a fatura e os totais continuam os mesmos.
+    // Substitui todos os dados do cartão. Como na categoria, vale para todos os
+    // meses, inclusive os fechados: nome, bandeira, titular, final, validade e
+    // cor são só rótulos; a fatura e os totais continuam os mesmos.
     @Transactional
-    public CardResponse rename(Long userId, Long id, CardRequest request) {
+    public CardResponse update(Long userId, Long id, CardRequest request) {
         Card card = findOrThrow(userId, id);
         String newName = request.name().trim();
-        if (!newName.equals(card.getName())) {
-            // "nubank" -> "Nubank" só muda maiúsculas: não conflita consigo mesmo.
-            if (!newName.equalsIgnoreCase(card.getName())) {
-                ensureNameIsFree(userId, newName);
-            }
-            card.rename(newName);
+        // "nubank" -> "Nubank" só muda maiúsculas: não conflita consigo mesmo.
+        if (!newName.equalsIgnoreCase(card.getName())) {
+            ensureNameIsFree(userId, newName);
         }
+        // Sem save(): o cartão veio do banco nesta transação, e o Hibernate
+        // grava sozinho o que mudou ao final dela ("dirty checking").
+        card.update(newName, request.brand(), request.holderName().trim(), request.lastFour(),
+                request.expiryMonth(), request.expiryYear(), request.color());
         return CardResponse.from(card);
     }
 

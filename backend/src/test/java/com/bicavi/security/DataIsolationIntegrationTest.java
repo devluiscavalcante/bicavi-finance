@@ -104,9 +104,7 @@ class DataIsolationIntegrationTest {
 
     @Test
     void bobCannotSeeReadRenameOrDeleteAlicesCard() throws Exception {
-        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
-                {"name": "Nubank"}
-                """);
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", cardJson("Nubank"));
         String path = "/api/cards/" + aliceCardId;
 
         mockMvc.perform(get("/api/cards").header("Authorization", bearer(bobToken)))
@@ -114,24 +112,25 @@ class DataIsolationIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(0));
         mockMvc.perform(get(path).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isNotFound());
+        // Corpo VÁLIDO de propósito: a validação (400) roda antes do service. Com um
+        // corpo inválido o teste veria 400 e deixaria de provar o que importa
+        // aqui: o 404 por ser o cartão de outra pessoa.
         mockMvc.perform(put(path).header("Authorization", bearer(bobToken))
-                        .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"name": "Hackeado"}
-                                """))
+                        .contentType(MediaType.APPLICATION_JSON).content(cardJson("Hackeado")))
                 .andExpect(status().isNotFound());
         mockMvc.perform(delete(path).header("Authorization", bearer(bobToken)))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(get(path).header("Authorization", bearer(aliceToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Nubank"));
+                .andExpect(jsonPath("$.name").value("Nubank"))
+                .andExpect(jsonPath("$.holderName").value("Alice Souza"))
+                .andExpect(jsonPath("$.lastFour").value("4321"));
     }
 
     @Test
     void bobCannotUseAlicesCardInHisTransaction() throws Exception {
-        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
-                {"name": "Nubank"}
-                """);
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", cardJson("Nubank"));
 
         mockMvc.perform(post("/api/transactions").header("Authorization", bearer(bobToken))
                         .contentType(MediaType.APPLICATION_JSON).content("""
@@ -143,9 +142,7 @@ class DataIsolationIntegrationTest {
 
     @Test
     void bobCannotPayAlicesTransactionOrInvoice() throws Exception {
-        long aliceCardId = createAndGetId(aliceToken, "/api/cards", """
-                {"name": "Nubank"}
-                """);
+        long aliceCardId = createAndGetId(aliceToken, "/api/cards", cardJson("Nubank"));
         String paid = """
                 {"paid": true}
                 """;
@@ -237,6 +234,14 @@ class DataIsolationIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.id")).longValue();
+    }
+
+    // Cartão completo e válido com este nome: aqui se testa o dono, não a validação.
+    private static String cardJson(String name) {
+        return """
+                {"name": "%s", "brand": "MASTERCARD", "holderName": "Alice Souza", "lastFour": "4321",
+                 "expiryMonth": 8, "expiryYear": 2030, "color": "ROXO"}
+                """.formatted(name);
     }
 
     private static String bearer(String token) {

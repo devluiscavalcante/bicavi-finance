@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api, ApiError } from '../api'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { sortByName } from '../lists'
-import { Check, ChevronLeft, Close, CreditCard, Pencil, Tag, Trash } from '../icons'
+import { Check, ChevronLeft, Close, Pencil, Tag, Trash } from '../icons'
 import type { CardResponse, CategoryResponse, TransactionType } from '../types'
+import { CardsTab } from './cards/CardsTab'
 
-// Categoria e cartão têm o mesmo formato na tela: id + nome, renomear e excluir.
+// O que a linha de uma categoria precisa: id + nome, para renomear e excluir.
 interface NamedItem {
   id: number
   name: string
@@ -21,18 +22,21 @@ type Tab = TransactionType | 'CARDS'
 
 const TABS: Tab[] = ['EXPENSE', 'INCOME', 'CARDS']
 
-const LABELS: Record<Tab, { tab: string; newTitle: string; empty: string; example: string }> = {
+const TAB_LABELS: Record<Tab, string> = {
+  EXPENSE: 'Despesas',
+  INCOME: 'Receitas',
+  CARDS: 'Cartões',
+}
+
+// Textos das abas de categoria. A de cartões tem a tela própria (CardsTab).
+const CATEGORY_TEXTS: Record<TransactionType, { newTitle: string; empty: string; example: string }> = {
   EXPENSE: {
-    tab: 'Despesas', newTitle: 'Nova categoria de despesa',
+    newTitle: 'Nova categoria de despesa',
     empty: 'Nenhuma categoria de despesa ainda.', example: 'Ex.: Mercado',
   },
   INCOME: {
-    tab: 'Receitas', newTitle: 'Nova categoria de receita',
+    newTitle: 'Nova categoria de receita',
     empty: 'Nenhuma categoria de receita ainda.', example: 'Ex.: Salário',
-  },
-  CARDS: {
-    tab: 'Cartões', newTitle: 'Novo cartão de crédito',
-    empty: 'Nenhum cartão cadastrado ainda.', example: 'Ex.: Banco do Brasil',
   },
 }
 
@@ -63,43 +67,38 @@ export function CategoriesPage() {
     setSearchParams(aba ? { aba } : {}, { replace: true })
   }
 
-  const isCards = tab === 'CARDS'
-  const path = isCards ? '/api/cards' : '/api/categories'
-  const loaded = isCards ? cards : categories
-  const items: NamedItem[] = isCards ? (cards ?? []) : (categories ?? []).filter(c => c.type === tab)
+  // Categorias da aba aberta (na aba de cartões, nenhuma).
+  const items = (categories ?? []).filter(c => c.type === tab)
 
   // As operações atualizam a lista local com a RESPOSTA do backend, sem buscar
   // tudo de novo: o servidor já devolve o item criado/renomeado.
-  async function create(name: string) {
-    if (isCards) {
-      const created = await api<CardResponse>('/api/cards', { method: 'POST', body: JSON.stringify({ name }) })
-      setCards(list => sortByName([...(list ?? []), created]))
-    } else {
-      const created = await api<CategoryResponse>('/api/categories', {
-        method: 'POST',
-        body: JSON.stringify({ name, type: tab }),
-      })
-      setCategories(list => sortByName([...(list ?? []), created]))
-    }
+  async function createCategory(name: string) {
+    const created = await api<CategoryResponse>('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, type: tab }),
+    })
+    setCategories(list => sortByName([...(list ?? []), created]))
   }
 
   function handleRenamed(renamed: NamedItem) {
-    if (isCards) {
-      setCards(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? { ...c, ...renamed } : c))))
-    } else {
-      setCategories(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? { ...c, ...renamed } : c))))
-    }
+    setCategories(list => sortByName((list ?? []).map(c => (c.id === renamed.id ? { ...c, ...renamed } : c))))
   }
 
   async function confirmDelete() {
     const target = toDelete!
-    await api<void>(`${path}/${target.id}`, { method: 'DELETE' })
-    if (isCards) {
-      setCards(list => (list ?? []).filter(c => c.id !== target.id))
-    } else {
-      setCategories(list => (list ?? []).filter(c => c.id !== target.id))
-    }
+    await api<void>(`/api/categories/${target.id}`, { method: 'DELETE' })
+    setCategories(list => (list ?? []).filter(c => c.id !== target.id))
     setToDelete(null)
+  }
+
+  // Cartão criado ou editado (o painel dos cartões já falou com a API):
+  // troca o que tinha o mesmo id, ou acrescenta se é novo.
+  function handleCardSaved(saved: CardResponse) {
+    setCards(list => sortByName([...(list ?? []).filter(c => c.id !== saved.id), saved]))
+  }
+
+  function handleCardDeleted(id: number) {
+    setCards(list => (list ?? []).filter(c => c.id !== id))
   }
 
   return (
@@ -115,46 +114,52 @@ export function CategoriesPage() {
         {TABS.map(t => (
           <button key={t} type="button" role="tab" aria-selected={tab === t}
                   className={tab === t ? 'active' : ''} onClick={() => changeTab(t)}>
-            {LABELS[t].tab}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
 
-      {/* key={tab}: trocar de aba recria o formulário, limpando nome e erro digitados. */}
-      <CreateItemForm key={tab} title={LABELS[tab].newTitle} placeholder={LABELS[tab].example}
-                      onCreate={create} />
+      {tab === 'CARDS' ? (
+        <>
+          {loadError && <p className="error">{loadError}</p>}
+          {/* Carregando: um retângulo com o formato de um cartão. */}
+          {!cards && !loadError && (
+            <div className="wallet-area">
+              <div className="skeleton paycard-skeleton" aria-busy="true" />
+            </div>
+          )}
+          {cards && <CardsTab cards={cards} onSaved={handleCardSaved} onDeleted={handleCardDeleted} />}
+        </>
+      ) : (
+        <>
+          {/* key={tab}: trocar de aba recria o formulário, limpando nome e erro digitados. */}
+          <CreateItemForm key={tab} title={CATEGORY_TEXTS[tab].newTitle} placeholder={CATEGORY_TEXTS[tab].example}
+                          onCreate={createCategory} />
 
-      {loadError && <p className="error">{loadError}</p>}
-      {!loaded && !loadError && <div className="skeleton" style={{ height: 200, marginTop: 16 }} />}
-      {loaded && (
-        <section className="card reveal" style={{ animationDelay: '80ms' }}>
-          <h2>{LABELS[tab].tab}</h2>
-          {isCards && (
-            <p className="muted">
-              O cartão é escolhido nas compras no crédito. A categoria continua dizendo o tipo do gasto.
-            </p>
+          {loadError && <p className="error">{loadError}</p>}
+          {!categories && !loadError && <div className="skeleton" style={{ height: 200, marginTop: 16 }} />}
+          {categories && (
+            <section className="card reveal" style={{ animationDelay: '80ms' }}>
+              <h2>{TAB_LABELS[tab]}</h2>
+              {items.length === 0 ? (
+                <p className="muted">{CATEGORY_TEXTS[tab].empty}</p>
+              ) : (
+                <ul className="category-list">
+                  {items.map(item => (
+                    <ItemRow key={item.id} item={item} onRenamed={handleRenamed} onDelete={setToDelete} />
+                  ))}
+                </ul>
+              )}
+            </section>
           )}
-          {items.length === 0 ? (
-            <p className="muted">{LABELS[tab].empty}</p>
-          ) : (
-            <ul className="category-list">
-              {items.map(item => (
-                <ItemRow key={item.id} item={item} path={path} icon={isCards ? <CreditCard /> : <Tag />}
-                         onRenamed={handleRenamed} onDelete={setToDelete} />
-              ))}
-            </ul>
-          )}
-        </section>
+        </>
       )}
 
       {toDelete && (
         <ConfirmDialog
           title={`Excluir "${toDelete.name}"?`}
-          message={isCards
-            ? 'As compras deste cartão não serão apagadas: elas ficarão sem cartão. '
-              + 'Cartão usado em mês fechado não pode ser excluído.'
-            : "As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'. "
-              + 'Categoria usada em mês fechado não pode ser excluída.'}
+          message={"As transações desta categoria não serão apagadas: elas ficarão como 'Sem categoria'. "
+            + 'Categoria usada em mês fechado não pode ser excluída.'}
           confirmLabel="Excluir"
           onConfirm={confirmDelete}
           onCancel={() => setToDelete(null)}
@@ -205,10 +210,8 @@ function CreateItemForm({ title, placeholder, onCreate }: {
   )
 }
 
-function ItemRow({ item, path, icon, onRenamed, onDelete }: {
+function ItemRow({ item, onRenamed, onDelete }: {
   item: NamedItem
-  path: string // '/api/categories' ou '/api/cards'
-  icon: ReactNode
   onRenamed: (item: NamedItem) => void
   onDelete: (item: NamedItem) => void
 }) {
@@ -233,8 +236,8 @@ function ItemRow({ item, path, icon, onRenamed, onDelete }: {
     setSaving(true)
     setError(null)
     try {
-      // PUT só aceita o nome (de uma categoria, o tipo não muda depois de criado).
-      const renamed = await api<NamedItem>(`${path}/${item.id}`, {
+      // PUT só aceita o nome (o tipo da categoria não muda depois de criada).
+      const renamed = await api<NamedItem>(`/api/categories/${item.id}`, {
         method: 'PUT',
         body: JSON.stringify({ name: trimmed }),
       })
@@ -271,7 +274,7 @@ function ItemRow({ item, path, icon, onRenamed, onDelete }: {
   return (
     <li className="category-row">
       <div className="category-name">
-        <span className="tx-icon">{icon}</span>
+        <span className="tx-icon"><Tag /></span>
         <span>{item.name}</span>
       </div>
       <div className="row-actions">

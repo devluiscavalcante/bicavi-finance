@@ -3,6 +3,7 @@ package com.bicavi.transaction;
 import com.bicavi.TestcontainersConfiguration;
 import com.bicavi.card.Card;
 import com.bicavi.card.CardRepository;
+import com.bicavi.card.TestCards;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
 import com.bicavi.common.BusinessRuleException;
@@ -68,7 +69,7 @@ class TransactionRepositoryTest {
     void createUsers() {
         alice = users.save(new User("alice@example.com", "$2a$10$hash", "Alice")).getId();
         bob = users.save(new User("bob@example.com", "$2a$10$hash", "Bob")).getId();
-        aliceCard = cards.save(new Card(alice, "Nubank"));
+        aliceCard = cards.save(TestCards.card(alice, "Nubank"));
     }
 
     @Test
@@ -156,7 +157,7 @@ class TransactionRepositoryTest {
 
     @Test
     void databaseRejectsCardOfAnotherUser() {
-        Card bobs = cards.save(new Card(bob, "Cartão do Bob"));
+        Card bobs = cards.save(TestCards.card(bob, "Cartão do Bob"));
         flushAndClear();
 
         assertThatThrownBy(() -> jdbc.update("""
@@ -254,7 +255,7 @@ class TransactionRepositoryTest {
     void findInPeriodLoadsCategoriesAndCardsInASingleQuery() {
         for (int i = 1; i <= 5; i++) {
             Category category = categories.save(new Category(alice, "Categoria " + i, TransactionType.EXPENSE));
-            Card card = cards.save(new Card(alice, "Cartão " + i));
+            Card card = cards.save(TestCards.card(alice, "Cartão " + i));
             transactions.save(expense("10.00").user(alice).category(category).credit(card)
                     .description("gasto " + i).build());
         }
@@ -400,7 +401,7 @@ class TransactionRepositoryTest {
 
     @Test
     void findCardPurchasesInPeriodReturnsOnlyThatCardInThatMonth() {
-        Card other = cards.save(new Card(alice, "Itaú"));
+        Card other = cards.save(TestCards.card(alice, "Itaú"));
         transactions.save(expense("10.00").user(alice).credit(aliceCard).description("fatura").on(DAY).build());
         transactions.save(expense("20.00").user(alice).credit(aliceCard).description("novembro").on(NOV_1).build());
         transactions.save(expense("30.00").user(alice).credit(other).description("outro cartão").on(DAY).build());
