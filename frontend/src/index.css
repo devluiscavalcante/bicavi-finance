@@ -33,6 +33,24 @@
      poder somar a transparência. */
   --particle: 24 24 27;
 
+  /* Cartões de crédito desenhados na aba Cartões (.paycard).
+     As três cores são do CARTÃO, não do tema: o roxo é o mesmo roxo no claro,
+     no escuro e no rosa, por isso só existem aqui. Vão em "background:", então
+     aceitam degradê (o degradê vem da referência do desenho; é a exceção à
+     regra de fundos chapados). A 1ª camada do "aurora" escurece a parte de
+     baixo, onde ficam o titular e a validade: texto branco sobre o coral puro
+     não dava leitura. */
+  --paycard-aurora: linear-gradient(to top, rgb(0 0 0 / 0.3), transparent 60%),
+    linear-gradient(165deg, #1c858b 0%, #6f62c9 52%, #ea6a72 100%);
+  --paycard-roxo: linear-gradient(165deg, #3b1f7c 0%, #1a0f3c 100%);
+  --paycard-preto: linear-gradient(165deg, #2a2a2e 0%, #0a0a0c 100%);
+  --paycard-text: #ffffff;
+  --paycard-muted: rgb(255 255 255 / 0.85);
+  --paycard-line: rgb(255 255 255 / 0.09);
+  /* Estes dois mudam com o tema: o fio de luz na borda do cartão e a sombra. */
+  --paycard-edge: rgb(255 255 255 / 0.12);
+  --paycard-shade: rgb(0 0 0 / 0.16);
+
   --radius-sm: 12px;
   --radius: 18px;
   --radius-lg: 24px;
@@ -80,6 +98,10 @@
 
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   --particle: 250 250 250;
+
+  /* No fundo quase preto, o cartão preto precisa de uma borda mais visível. */
+  --paycard-edge: rgb(255 255 255 / 0.18);
+  --paycard-shade: rgb(0 0 0 / 0.5);
 }
 
 /* Rosa: fundo rosado, texto ameixa, destaque pink e o cartão do saldo em
@@ -115,6 +137,9 @@
 
   --shadow: 0 1px 2px rgb(236 72 153 / 0.06), 0 4px 16px rgb(236 72 153 / 0.1);
   --particle: 236 72 153;
+
+  --paycard-edge: rgb(255 255 255 / 0.12);
+  --paycard-shade: rgb(190 24 93 / 0.2);
 }
 
 /* ---------- Base ---------- */
@@ -1193,10 +1218,13 @@ html:has(dialog[open]) {
   font-weight: 600;
 }
 
-/* Seletor Despesa | Receita */
+/* Seletor Despesa | Receita (e Despesas | Receitas | Cartões).
+   Uma coluna igual por botão, quantos forem: com "1fr 1fr" fixo, o terceiro
+   botão quebrava para uma segunda linha. */
 .segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 4px;
   padding: 4px;
   background: var(--surface-2);
@@ -2137,6 +2165,280 @@ button.pay-toggle:disabled {
   color: var(--muted);
 }
 
+/* ---------- Cartões (aba Cartões) ---------- */
+
+/* A pilha não passa do tamanho de um cartão de verdade numa tela larga. */
+.wallet-area {
+  max-width: 400px;
+  margin: 20px auto 0;
+}
+
+/* Pilha de cartões, como numa carteira: de cada cartão de trás aparece só a
+   faixa de cima (--peek); o da frente aparece inteiro.
+
+   Os cartões ficam soltos no topo (position: absolute) e cada um desce até o
+   seu lugar com um transform: --pos (vindo do CardsTab) vezes a altura da
+   faixa. Trocar o cartão da frente só muda os --pos, e a transição do
+   transform faz os cartões deslizarem.
+
+   Com os cartões soltos, a altura da pilha é reservada à mão:
+     - height: as faixas dos cartões de trás (--count vem do CardsTab);
+     - padding-bottom: o cartão da frente inteiro. Padding em % é medido pela
+       LARGURA do pai, e a altura de um cartão é a largura / 1.586. */
+.wallet {
+  --peek: 56px;
+  position: relative;
+  box-sizing: content-box;
+  height: calc((var(--count) - 1) * var(--peek));
+  margin: 0;
+  padding: 0 0 calc(100% / 1.586);
+  list-style: none;
+}
+
+/* z-index = lugar na pilha: quem está mais à frente cobre os de trás. */
+.wallet-item {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: var(--pos);
+  transform: translateY(calc(var(--pos) * var(--peek)));
+  transition: transform 0.45s var(--ease);
+  /* Ao abrir a aba (ou ao entrar um cartão novo), o cartão sai do topo e desce
+     até o lugar dele. "backwards" e não "both": terminada a animação ela solta
+     o transform, e a transição acima volta a valer. */
+  animation: wallet-fan 0.6s var(--ease) backwards;
+}
+
+@keyframes wallet-fan {
+  from {
+    transform: translateY(0);
+  }
+}
+
+/* O botão não tem aparência própria: o que se vê é o desenho do cartão dentro dele. */
+.wallet-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  transition: transform 0.2s var(--ease);
+}
+
+.wallet-card:active {
+  transform: scale(0.98);
+}
+
+/* Só onde existe mouse: no toque, o "hover" ficaria preso depois do dedo sair. */
+@media (hover: hover) {
+  .wallet-card:hover {
+    transform: translateY(-4px);
+  }
+}
+
+.wallet-hint {
+  margin-top: 12px;
+  text-align: center;
+  text-wrap: balance; /* sem uma palavra sozinha na última linha */
+}
+
+.wallet-add {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  margin: 20px auto 0;
+}
+
+.wallet-note {
+  margin-top: 16px;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* O desenho do cartão, na proporção de um cartão de verdade (85,6 x 54 mm).
+   Tudo aqui dentro é <span> (o desenho vai dentro de um botão), por isso cada
+   parte declara o próprio display. */
+.paycard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1.586;
+  overflow: hidden;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: var(--paycard-bg);
+  color: var(--paycard-text);
+  /* Fio de luz por dentro da borda, sombra para cima (sobre o cartão de trás)
+     e sombra para baixo (sobre a página). */
+  box-shadow: inset 0 0 0 1px var(--paycard-edge), 0 -6px 16px var(--paycard-shade),
+    0 8px 24px var(--paycard-shade);
+}
+
+.paycard.aurora {
+  --paycard-bg: var(--paycard-aurora);
+}
+
+.paycard.roxo {
+  --paycard-bg: var(--paycard-roxo);
+}
+
+.paycard.preto {
+  --paycard-bg: var(--paycard-preto);
+}
+
+/* Textura: arcos finos saindo do canto de baixo. A máscara apaga os arcos em
+   direção ao canto oposto, onde ficam a bandeira e o nome. */
+.paycard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-radial-gradient(circle at 100% 130%, transparent 0 11px, var(--paycard-line) 11px 12px);
+  mask-image: linear-gradient(to top left, #000, transparent 70%);
+  pointer-events: none;
+}
+
+/* Cartão antigo, ainda sem os dados: neutro e tracejado, um molde a preencher.
+   Usa as cores do tema (e não as do cartão), então acompanha claro/escuro/rosa. */
+.paycard.blank {
+  border: 2px dashed var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: 0 -6px 16px var(--paycard-shade);
+}
+
+.paycard.blank::before {
+  display: none;
+}
+
+.paycard.blank .paycard-holder {
+  color: var(--muted);
+}
+
+/* position: relative põe o conteúdo acima da textura (o ::before). */
+.paycard-top,
+.paycard-bottom {
+  position: relative;
+  display: flex;
+}
+
+.paycard-top {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Marca da bandeira (BrandMark.tsx): todas com 24px de altura; a largura sai
+   da proporção de cada desenho. Nome "card-brand" porque .brand-mark já é o
+   "B" do logo no login. */
+.card-brand {
+  flex-shrink: 0;
+  width: auto;
+  height: 24px;
+}
+
+/* Os nomes das bandeiras em letras: peso 800 só aqui, por ser o desenho de uma marca. */
+.card-brand-word {
+  font-weight: 800;
+}
+
+.paycard-name {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paycard-bottom {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paycard-number {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.paycard-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paycard-holder {
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--paycard-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paycard-expiry {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Carregando os cartões: um retângulo com o formato de um cartão. */
+.paycard-skeleton {
+  aspect-ratio: 1.586;
+}
+
+/* Prévia no topo do painel do cartão: menor que na pilha, para sobrar altura
+   para os campos quando o teclado abre. */
+.paycard-preview {
+  max-width: 280px;
+  margin: 0 auto 20px;
+}
+
+/* Dois campos lado a lado (final do cartão e validade). */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Sem isto o <input> usa a largura padrão do navegador e estoura a coluna. */
+.field-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Chip de cor: a bolinha pintada como o cartão, ao lado do nome da cor. */
+.chip:has(.swatch) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* O aro usa a cor do texto do chip: o preto não some no chip escuro nem no claro. */
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+.swatch.aurora {
+  background: var(--paycard-aurora);
+}
+
+.swatch.roxo {
+  background: var(--paycard-roxo);
+}
+
+.swatch.preto {
+  background: var(--paycard-preto);
+}
+
 /* ---------- Celular deitado ----------
    "landscape" sozinho pegaria também tablets e PCs; com a altura até 500px,
    só pega o celular na horizontal (a tela fica larga e baixa).
@@ -2174,5 +2476,15 @@ button.pay-toggle:disabled {
 
   .sheet {
     max-height: var(--app-height, 100dvh);
+  }
+
+  /* Deitado, a altura é o que falta: a pilha encolhe e o painel fica só com os campos. */
+  .wallet-area,
+  .wallet-add {
+    max-width: 320px;
+  }
+
+  .paycard-preview {
+    display: none;
   }
 }

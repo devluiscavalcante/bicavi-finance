@@ -2,6 +2,7 @@ package com.bicavi.transaction;
 
 import com.bicavi.card.Card;
 import com.bicavi.card.CardRepository;
+import com.bicavi.card.TestCards;
 import com.bicavi.category.Category;
 import com.bicavi.category.CategoryRepository;
 import com.bicavi.common.BusinessRuleException;
@@ -39,7 +40,7 @@ class TransactionServiceTest {
     private static final LocalDate CLOSED_DAY = LocalDate.of(2026, 9, 15);
     // Cartão do usuário: compras no crédito exigem um.
     private static final Long CARD_ID = 9L;
-    private static final Card NUBANK = new Card(USER, "Nubank");
+    private static final Card NUBANK = TestCards.card(USER, "Nubank");
 
     @Mock
     private TransactionRepository transactions;
@@ -373,7 +374,7 @@ class TransactionServiceTest {
     void updateFollowingSpreadsTheNewCard() {
         Transaction second = part(2, LocalDate.of(2026, 11, 10));
         Transaction third = part(3, LocalDate.of(2026, 12, 10));
-        Card itau = new Card(USER, "Itaú");
+        Card itau = TestCards.card(USER, "Itaú");
         when(transactions.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(second));
         when(transactions.findFollowingInstallments(USER, GROUP, 2)).thenReturn(List.of(third));
         when(cards.findByIdAndUserId(4L, USER)).thenReturn(Optional.of(itau));

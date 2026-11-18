@@ -88,11 +88,36 @@ export interface CategoryResponse {
   type: TransactionType
 }
 
+export type CardBrand = 'VISA' | 'MASTERCARD' | 'ELO' | 'AMEX' | 'HIPERCARD' | 'OUTRA'
+
+// Cor do desenho do cartão (como cada uma é pintada está no index.css).
+export type CardColor = 'AURORA' | 'ROXO' | 'PRETO'
+
 // Cartão de crédito: separado das categorias (categoria = o que comprei,
 // cartão = como paguei).
+// Cartão cadastrado antes de existirem bandeira, titular etc. só tem id e nome:
+// os outros campos vêm TODOS null, e a tela pede para completar.
 export interface CardResponse {
   id: number
   name: string
+  brand: CardBrand | null
+  holderName: string | null
+  lastFour: string | null // texto: "0042" mantém os zeros
+  expiryMonth: number | null // 1 a 12
+  expiryYear: number | null // 2029
+  color: CardColor | null
+}
+
+// Corpo do POST e do PUT /api/cards: o cartão inteiro, tudo obrigatório.
+// Não existe campo para o número completo nem para o código de segurança.
+export interface CardRequest {
+  name: string
+  brand: CardBrand
+  holderName: string
+  lastFour: string
+  expiryMonth: number
+  expiryYear: number
+  color: CardColor
 }
 
 // Corpo do POST /api/transactions/installments (compra parcelada, sempre despesa).
