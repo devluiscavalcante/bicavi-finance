@@ -94,6 +94,9 @@ public class Transaction {
         tx.installmentGroup = group;
         tx.installmentNumber = number;
         tx.installmentCount = count;
+        // O construtor acima rodou apply() quando a transação ainda não era
+        // parcela; as regras de parcela só podem ser conferidas agora.
+        tx.checkInstallmentRules(TransactionType.EXPENSE, paymentMethod);
         return tx;
     }
 
@@ -123,10 +126,7 @@ public class Transaction {
     private void apply(Category category, BigDecimal amount, TransactionType type,
                        PaymentMethod paymentMethod, Card card, String description, LocalDate occurredOn) {
         validate(category, amount, type, paymentMethod, card, occurredOn);
-        // Parcela é despesa de uma compra: virar receita não faz sentido.
-        if (installmentGroup != null && type != TransactionType.EXPENSE) {
-            throw new BusinessRuleException("Parcelas de uma compra são sempre despesas");
-        }
+        checkInstallmentRules(type, paymentMethod);
         // Defesa extra: o service só deveria passar categorias do próprio usuário.
         // Se isto disparar, é BUG nosso (500), não erro do cliente (400).
         if (category != null && !category.getUserId().equals(userId)) {
@@ -146,6 +146,25 @@ public class Transaction {
         // (e o CHECK do banco, V10, recusaria a linha).
         if (type != TransactionType.EXPENSE) {
             this.paidOn = null;
+        }
+    }
+
+    // Regras de quem é parcela (transação comum não passa por aqui).
+    // Valem ao criar e ao editar: editar não pode levar a parcela para um estado
+    // que a criação recusaria (ver TransactionService.createInstallments).
+    private void checkInstallmentRules(TransactionType type, PaymentMethod paymentMethod) {
+        if (installmentGroup == null) {
+            return;
+        }
+        // Parcela é despesa de uma compra: virar receita não faz sentido.
+        if (type != TransactionType.EXPENSE) {
+            throw new BusinessRuleException("Parcelas de uma compra são sempre despesas");
+        }
+        // Parcelar é coisa do cartão de crédito. Se uma parcela virasse Pix,
+        // perderia o cartão e sairia da fatura (com "esta e as próximas", todas
+        // as seguintes iriam junto), e a compra ficaria "parcelada no Pix".
+        if (paymentMethod != PaymentMethod.CREDITO) {
+            throw new BusinessRuleException("Parcelas de uma compra são sempre no crédito");
         }
     }
 

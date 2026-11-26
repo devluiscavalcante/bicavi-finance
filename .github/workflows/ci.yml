@@ -1,6 +1,7 @@
 # Integração contínua: a cada push na develop/master (e em pull requests),
-# o GitHub roda os testes do backend e o lint, testes e build do frontend numa máquina
-# limpa. O resultado aparece como ✅/❌ em cada commit.
+# o GitHub roda os testes do backend, o lint, testes e build do frontend e sobe a
+# stack Docker de produção, numa máquina limpa. O resultado aparece como ✅/❌ em
+# cada commit.
 #
 # Por que vale a pena: hoje, o que impede código quebrado de chegar à master
 # é lembrar de rodar os testes. Aqui isso acontece sempre, sozinho, e numa
@@ -80,3 +81,69 @@ jobs:
       - run: npm test
       # tsc -b && vite build: falha se houver erro de tipos.
       - run: npm run build
+
+  # Sobe a stack de produção (compose.yaml) como no PC de casa e faz duas
+  # requisições pelo nginx.
+  #
+  # Por que não só "docker build": parte do que quebra só aparece quando o
+  # container LIGA. Uma opção errada da JVM no ENTRYPOINT ou um erro no
+  # nginx.conf passam no build (nada disso roda durante ele) e só derrubam o
+  # app na hora de subir. Sem este job, isso só seria descoberto em casa,
+  # depois do "git pull".
+  docker:
+    name: Docker (build e subida da stack)
+    runs-on: ubuntu-latest
+    # Rede de segurança: um container travado não prende a máquina do CI por horas.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # Segredos descartáveis, gerados aqui e apagados junto com a máquina do CI.
+      # Mesmos nomes do .env.example; openssl rand -hex gera só letras e números,
+      # o formato que o create-app-role.ps1 exige.
+      - name: Criar o .env de teste
+        run: |
+          {
+            echo "DB_NAME=bicavi"
+            echo "DB_USER=bicavi"
+            echo "DB_PASSWORD=$(openssl rand -hex 20)"
+            echo "APP_DB_USER=bicavi_app"
+            echo "APP_DB_PASSWORD=$(openssl rand -hex 20)"
+            echo "JWT_SECRET=$(openssl rand -hex 32)"
+          } > .env
+
+      - name: Construir as imagens
+        run: docker compose build
+
+      # Os mesmos passos da instalação (DEPLOY.md): banco, usuário do app, o resto.
+      # --wait: espera os containers ficarem prontos (healthcheck) e falha se um
+      # deles morrer. pwsh: o PowerShell já vem instalado na máquina do GitHub.
+      - name: Subir a stack
+        run: |
+          docker compose up -d --wait --wait-timeout 120 db
+          pwsh ./scripts/create-app-role.ps1
+          docker compose up -d --wait --wait-timeout 180
+
+      - name: Testar pelo nginx
+        run: |
+          # O app abre, com os cabeçalhos de segurança do nginx.conf.
+          # --retry-all-errors: o nginx não tem healthcheck, então o --wait não
+          # sabe se ele já atende; tenta de novo por alguns segundos antes de falhar.
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 2 -D headers.txt -o /dev/null http://127.0.0.1:8088/
+          grep -qi '^content-security-policy:' headers.txt
+          # Cadastro: passa por nginx -> backend -> banco, gravando com o usuário do app.
+          status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"name":"CI","email":"ci@teste.dev","password":"senha-do-ci-123"}' \
+            http://127.0.0.1:8088/api/auth/register)
+          echo "cadastro: HTTP $status"
+          test "$status" = 201
+
+      # Se algo falhou, mostra o estado e os logs dos containers: sem eles,
+      # descobrir o motivo seria adivinhação.
+      - name: Logs dos containers (se falhou)
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color

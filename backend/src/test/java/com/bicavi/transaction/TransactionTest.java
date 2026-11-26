@@ -81,6 +81,13 @@ class TransactionTest {
     }
 
     @Test
+    void installmentIsBornOnCreditOnly() {
+        assertThatThrownBy(() -> expense("10").installment(java.util.UUID.randomUUID(), 1, 2).build())
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Parcelas de uma compra são sempre no crédito");
+    }
+
+    @Test
     void updateAppliesPaymentMethodRuleToo() {
         Transaction tx = expense("10").build();
 

@@ -8,12 +8,29 @@
 # com outro volume: dados reais e dados de teste nunca se misturam.
 name: bicavi
 
+# Rotação dos logs, igual nos três serviços (cada um usa com "logging: *logging").
+#
+# Por padrão o Docker guarda TUDO o que o container escreve no console num único
+# arquivo, que cresce para sempre: com o app rodando meses no PC de casa, os logs
+# iriam ocupando o disco aos poucos. Aqui cada container guarda no máximo 3
+# arquivos de 10 MB (30 MB): ao encher o atual, o Docker abre um novo e apaga o
+# mais antigo. "docker compose logs" continua funcionando igual.
+#
+# "x-": campo extra que o compose ignora; só existe para ser reaproveitado.
+# "&logging" dá um nome (âncora YAML) a este bloco; "*logging" o repete.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     # Tag, e não digest: o "compose pull db" traz as correções do Postgres 17.x
     # (ver DEPLOY.md, seção 8).
     image: postgres:17
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -37,6 +54,7 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    logging: *logging
     environment:
       DB_HOST: db
       DB_NAME: ${DB_NAME}
@@ -49,7 +67,8 @@ services:
       DB_PASSWORD: ${APP_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     networks: [app, data]
-    # A JVM usa até 75% disto (MaxRAMPercentage no Dockerfile).
+    # Heap da JVM: até 60% disto; o resto fica para a própria JVM
+    # (ver o comentário do ENTRYPOINT no backend/Dockerfile).
     mem_limit: 768m
     pids_limit: 200
     security_opt: ["no-new-privileges:true"]
@@ -74,6 +93,7 @@ services:
   web:
     build: ./frontend
     restart: unless-stopped
+    logging: *logging
     # 127.0.0.1: acessível só NESTE computador (nem a rede local alcança).
     # Quem expõe para os iPhones, com HTTPS, é o Tailscale (ver DEPLOY.md).
     ports:
