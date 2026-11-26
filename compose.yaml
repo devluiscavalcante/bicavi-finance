@@ -67,7 +67,8 @@ services:
       DB_PASSWORD: ${APP_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     networks: [app, data]
-    # A JVM usa até 75% disto (MaxRAMPercentage no Dockerfile).
+    # Heap da JVM: até 60% disto; o resto fica para a própria JVM
+    # (ver o comentário do ENTRYPOINT no backend/Dockerfile).
     mem_limit: 768m
     pids_limit: 200
     security_opt: ["no-new-privileges:true"]

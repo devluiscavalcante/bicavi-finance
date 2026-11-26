@@ -32,5 +32,19 @@ COPY --from=build /app/target/*.jar app.jar
 USER bicavi
 
 EXPOSE 8080
-# MaxRAMPercentage: a JVM respeita a memória do container em vez da do PC inteiro.
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
+# Memória. O limite do container é 768m (mem_limit no compose.yaml), e a JVM
+# usa memória em duas partes:
+#  - heap: os objetos do app. Medido sob carga: ~80 MiB em uso.
+#  - todo o resto (classes do Spring/Hibernate, código compilado pelo JIT,
+#    threads...): ~220 MiB, medido com Native Memory Tracking (nov/2026).
+#
+# MaxRAMPercentage=60: o heap pode crescer até 60% do limite (~460 MiB), bem
+# mais do que o app usa. Com 75% (~576 MiB), um pico de heap somado aos ~220 MiB
+# do resto passaria dos 768m: o Docker mataria o processo na hora (OOMKilled),
+# sem deixar nenhuma mensagem no log. Com 60%, sobra folga para o resto.
+#
+# ExitOnOutOfMemoryError: se mesmo assim o heap acabar, a JVM escreve o erro no
+# log e encerra; o "restart: unless-stopped" do compose sobe o app de novo.
+# Sem ele, o app poderia continuar rodando pela metade (o erro mata só a
+# thread que estava trabalhando, e as outras seguem num estado desconhecido).
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=60", "-XX:+ExitOnOutOfMemoryError", "-jar", "app.jar"]
