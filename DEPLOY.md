@@ -133,6 +133,11 @@ O script `scripts\backup.ps1` salva o banco num arquivo com data e hora e apaga
 os backups com mais de 30 dias. Aponte o destino para uma pasta do **OneDrive** ou
 **Google Drive**: assim o backup sai do computador sozinho.
 
+Cada backup novo também é **testado**: o script `scripts\test-restore.ps1` o
+restaura num Postgres descartável (um container sem rede, apagado no fim; o banco
+de produção não é tocado) e confere que os dados voltaram. Um arquivo corrompido
+ou o backup do banco errado não passam no teste. Leva poucos segundos.
+
 Teste uma vez (troque o caminho pela sua pasta):
 
 ```powershell
@@ -153,8 +158,26 @@ ele voltar. O backup depende do Docker Desktop aberto (e do OneDrive para subir
 para a nuvem), e os dois só rodam com alguém logado no Windows: mais um motivo
 para o login automático do passo 1.
 
-**Confira de vez em quando** se há arquivos novos na pasta de backups. Um backup
-que parou de rodar não avisa ninguém.
+### Conferir se os backups estão funcionando
+
+Cada execução deixa uma linha no arquivo **`backup.log`**, na mesma pasta dos
+backups (pelo OneDrive, dá para abrir no celular):
+
+```
+2026-11-26 22:00  OK      bicavi-2026-11-26_2200.dump (19.8 KB) - restaurado no teste: 2 usuarios, 318 transacoes
+2026-11-27 22:00  FALHOU  pg_dump falhou (o container 'db' esta rodando?)
+```
+
+- **`OK`**: o backup foi salvo e passou no teste. Os números de usuários e
+  transações crescem com o tempo; uma queda brusca merece atenção.
+- **`FALHOU`**: o motivo vem na própria linha. Nesse caso **nenhum backup antigo
+  é apagado**. Se o arquivo foi salvo mas não passou no teste, ele ganha o final
+  `-FALHOU.dump`: não use esse para restaurar.
+
+**Confira o `backup.log` de vez em quando**: a última linha deve ser recente e
+começar com `OK`. Um backup que nem chegou a rodar (ninguém entrou no Windows, a
+tarefa foi desativada) não escreve linha nenhuma: uma última linha antiga também
+é sinal de problema.
 
 ## 8. Atualizar para uma versão nova
 
@@ -274,10 +297,18 @@ Depois disso, as próximas atualizações voltam a usar o `git pull` normalmente
 
 ## 9. Restaurar um backup
 
-**Substitui todos os dados atuais** pelos do arquivo escolhido:
+Escolha o backup mais recente com `OK` no `backup.log` (nunca um `-FALHOU.dump`).
+Para conferir um arquivo antes, sem mexer em nada (restaura só no Postgres
+descartável do teste):
 
 ```powershell
 cd C:\bicavi
+powershell -ExecutionPolicy Bypass -File .\scripts\test-restore.ps1 -Arquivo "C:\...\Bicavi-backups\bicavi-2026-10-07_2200.dump"
+```
+
+A restauração de verdade **substitui todos os dados atuais** pelos do arquivo escolhido:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -Arquivo "C:\...\Bicavi-backups\bicavi-2026-10-07_2200.dump"
 ```
 
@@ -291,6 +322,8 @@ O script pede para digitar `RESTAURAR` antes de continuar.
 | Parou de abrir depois de uma noite | PC reiniciou (Windows Update) e ninguém entrou no Windows: o Docker Desktop não abriu |
 | Funciona no Wi-Fi mas não no 4G | VPN do Tailscale desligada no iPhone (ative o VPN On Demand), ou o app Tailscale sem permissão de usar dados móveis |
 | `docker compose` dá erro de conexão | Docker Desktop não está aberto |
+| Última linha do `backup.log` com `FALHOU` | O motivo está na linha. `pg_dump falhou`: o Docker Desktop estava fechado na hora do backup |
+| Última linha do `backup.log` antiga | O backup não rodou: ninguém entrou no Windows, ou a tarefa `Bicavi Backup` foi desativada |
 | Login pede senha de novo no app instalado | Normal no iPhone: o app tem armazenamento próprio |
 | Página abre mas mostra erro ao carregar dados | Backend iniciando (aguarde ~20 s) ou parado: veja `docker compose logs backend` |
 
