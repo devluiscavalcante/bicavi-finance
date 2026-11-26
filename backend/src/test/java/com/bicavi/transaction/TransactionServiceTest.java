@@ -345,26 +345,23 @@ class TransactionServiceTest {
     }
 
     @Test
-    void updateFollowingSpreadsCategoryPaymentAndNameButNotAmountOrDate() {
+    void updateFollowingSpreadsCategoryAndNameButNotAmountOrDate() {
         Transaction second = part(2, LocalDate.of(2026, 11, 10));
         Transaction third = part(3, LocalDate.of(2026, 12, 10));
         Category games = new Category(USER, "Games", TransactionType.EXPENSE);
         when(transactions.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(second));
         when(transactions.findFollowingInstallments(USER, GROUP, 2)).thenReturn(List.of(third));
         when(categories.findByIdAndUserId(5L, USER)).thenReturn(Optional.of(games));
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.of(NUBANK));
 
         service.update(USER, 2L, new TransactionRequest(new BigDecimal("40.00"), TransactionType.EXPENSE,
-                PaymentMethod.DEBITO, null, 5L, "PS5 Pro", LocalDate.of(2026, 11, 15)), EditScope.FOLLOWING);
+                PaymentMethod.CREDITO, CARD_ID, 5L, "PS5 Pro", LocalDate.of(2026, 11, 15)), EditScope.FOLLOWING);
 
         // A parcela editada recebe tudo.
         assertThat(second.getAmount()).isEqualByComparingTo("40.00");
         assertThat(second.getOccurredOn()).isEqualTo(LocalDate.of(2026, 11, 15));
-        // A seguinte: categoria, forma de pagamento e nome sim; valor e data não.
+        // A seguinte: categoria e nome sim; valor e data não.
         assertThat(third.getCategory()).isSameAs(games);
-        assertThat(third.getPaymentMethod()).isEqualTo(PaymentMethod.DEBITO);
-        // Saiu do crédito: as duas parcelas perdem o cartão.
-        assertThat(second.getCard()).isNull();
-        assertThat(third.getCard()).isNull();
         assertThat(third.getDescription()).isEqualTo("PS5 Pro");
         assertThat(third.getAmount()).isEqualByComparingTo("33.33");
         assertThat(third.getOccurredOn()).isEqualTo(LocalDate.of(2026, 12, 10));
@@ -390,11 +387,32 @@ class TransactionServiceTest {
     void updateThisInstallmentDoesNotLookForTheOthers() {
         Transaction second = part(2, LocalDate.of(2026, 11, 10));
         when(transactions.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(second));
+        when(cards.findByIdAndUserId(CARD_ID, USER)).thenReturn(Optional.of(NUBANK));
 
-        service.update(USER, 2L, new TransactionRequest(new BigDecimal("33.33"), TransactionType.EXPENSE,
-                PaymentMethod.PIX, null, null, "PS5", LocalDate.of(2026, 11, 10)), EditScope.THIS);
+        service.update(USER, 2L, new TransactionRequest(new BigDecimal("35.00"), TransactionType.EXPENSE,
+                PaymentMethod.CREDITO, CARD_ID, null, "PS5", LocalDate.of(2026, 11, 10)), EditScope.THIS);
 
-        assertThat(second.getPaymentMethod()).isEqualTo(PaymentMethod.PIX);
+        assertThat(second.getAmount()).isEqualByComparingTo("35.00");
+        verify(transactions, never()).findFollowingInstallments(any(), any(), any());
+    }
+
+    // Criar parcelas exige crédito (installmentsOnlyOnCredit); editar não pode
+    // contornar isso. Com "esta e as próximas", a recusa vem antes de tocar nas
+    // seguintes: nenhuma parcela muda.
+    @Test
+    void installmentCannotLeaveCredit() {
+        Transaction second = part(2, LocalDate.of(2026, 11, 10));
+        when(transactions.findByIdAndUserId(2L, USER)).thenReturn(Optional.of(second));
+
+        for (EditScope scope : EditScope.values()) {
+            assertThatThrownBy(() -> service.update(USER, 2L, new TransactionRequest(new BigDecimal("33.33"),
+                    TransactionType.EXPENSE, PaymentMethod.DEBITO, null, null, "PS5",
+                    LocalDate.of(2026, 11, 10)), scope))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("Parcelas de uma compra são sempre no crédito");
+        }
+        assertThat(second.getPaymentMethod()).isEqualTo(PaymentMethod.CREDITO);
+        assertThat(second.getCard()).isSameAs(NUBANK);
         verify(transactions, never()).findFollowingInstallments(any(), any(), any());
     }
 

@@ -64,6 +64,8 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
   const split = canSplit && installments > 1
   const previewAmount = parseAmount(amountText)
   const applyToFollowing = isInstallment && scope === 'FOLLOWING'
+  // Parcela é sempre no crédito (o backend recusa outra forma): só oferece ele.
+  const paymentOptions: PaymentMethod[] = isInstallment ? ['CREDITO'] : PAYMENT_METHODS
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -257,7 +259,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
               </div>
               {applyToFollowing && (
                 <span className="hint">
-                  Categoria, forma de pagamento, cartão e descrição valem também para as {followingCount} parcela(s)
+                  Categoria, cartão e descrição valem também para as {followingCount} parcela(s)
                   seguinte(s). Valor e data mudam só nesta.
                 </span>
               )}
@@ -279,7 +281,7 @@ export function TransactionSheet({ transaction, defaultDate, period, onClose, on
             <div className="field">
               <span className="field-label">Forma de pagamento</span>
               <div className="chips" role="radiogroup" aria-label="Forma de pagamento">
-                {PAYMENT_METHODS.map(m => (
+                {paymentOptions.map(m => (
                   <button key={m} type="button" role="radio" aria-checked={paymentMethod === m}
                           className={paymentMethod === m ? 'chip active' : 'chip'}
                           onClick={() => changePaymentMethod(m)}>
